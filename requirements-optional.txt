@@ -1,0 +1,4 @@
+akshare
+qlib
+rqalpha
+vnpy

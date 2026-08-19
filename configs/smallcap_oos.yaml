@@ -1,0 +1,31 @@
+data:
+  path: data/raw
+  symbols_file: data/universe/smallcap_symbols.csv
+  start: "2025-01-02"
+  end: "2026-08-18"
+
+account:
+  initial_cash: 1000000
+  commission_rate: 0.0003
+  min_commission: 5
+  stamp_tax_rate: 0.001
+  slippage_bps: 3
+
+risk:
+  max_position_pct: 0.22
+  max_order_value_pct: 0.20
+  lot_size: 100
+  enforce_t1: true
+
+strategy:
+  name: small_cap_momentum
+  momentum_window: 40
+  rebalance_interval: 20
+  top_n: 10
+  target_gross_exposure: 0.85
+  min_momentum: 0.00
+  min_trade_value: 8000
+
+output:
+  backtest_dir: runs/smallcap_oos_backtest
+  paper_dir: runs/smallcap_oos_paper

@@ -1,0 +1,30 @@
+data:
+  path: data/raw
+  symbols:
+    - 000001.SZ
+    - 600519.SH
+  start: "2023-01-03"
+  end: "2023-06-30"
+
+account:
+  initial_cash: 1000000
+  commission_rate: 0.0003
+  min_commission: 5
+  stamp_tax_rate: 0.001
+  slippage_bps: 2
+
+risk:
+  max_position_pct: 0.45
+  max_order_value_pct: 0.40
+  lot_size: 100
+  enforce_t1: true
+
+strategy:
+  name: moving_average_cross
+  short_window: 5
+  long_window: 20
+  target_position_pct: 0.35
+
+output:
+  backtest_dir: runs/backtest
+  paper_dir: runs/paper
