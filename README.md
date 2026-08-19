@@ -75,4 +75,13 @@ python -m aqt.cli paper-run --config configs/smallcap_best.yaml
 python -m aqt.cli report --run-dir runs/smallcap_best_paper
 ```
 
+## GitHub 自动化
+
+已加入 GitHub Actions 自动任务，说明见 [docs/github-automation.md](/home/chery/Documents/Quant/docs/github-automation.md)。
+
+- 收盘后选股：`reports/daily/YYYYMMDD/`
+- 盘中 5 分钟观察：`reports/intraday/YYYYMMDD/HHMM/`
+
+这些任务用于研究、复盘和模拟跟踪，不直接执行真实下单。
+
 仅供工程学习和研究验证，不构成投资建议。
