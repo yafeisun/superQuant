@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/raw/*.csv
+data/health/*.csv
 runs/
+local_runs/

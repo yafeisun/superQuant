@@ -5,7 +5,7 @@ data:
   end: "2026-08-18"
 
 account:
-  initial_cash: 1000000
+  initial_cash: 100000
   commission_rate: 0.0003
   min_commission: 5
   stamp_tax_rate: 0.001
@@ -39,12 +39,12 @@ strategy:
   top_n: 5
   target_gross_exposure: 0.85
   min_momentum: 0.00
-  min_trade_value: 8000
+  min_trade_value: 3000
   support_window: 20
   target_window: 60
   trend_window: 5
   risk_reward_ratio: 2.0
 
 output:
-  backtest_dir: runs/smallcap_best_backtest
-  paper_dir: runs/smallcap_best_paper
+  backtest_dir: runs/smallcap_live_backtest
+  paper_dir: runs/smallcap_live_paper

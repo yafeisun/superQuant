@@ -66,7 +66,7 @@ docs/roadmap.md    分阶段搭建指南
 
 ## 小盘策略方案
 
-当前已加入低换手小盘动量轮动策略，说明见 [docs/smallcap-strategy.md](/home/chery/Documents/Quant/docs/smallcap-strategy.md)。常用命令：
+当前已加入小盘动量轮动策略，模拟跟踪最多 5 只，买入前会过滤停牌、ST/退市风险、涨停、流动性不足、PE 异常和市值范围异常。说明见 [docs/smallcap-strategy.md](/home/chery/Documents/Quant/docs/smallcap-strategy.md)。常用命令：
 
 ```bash
 source .venv/bin/activate
@@ -80,8 +80,27 @@ python -m aqt.cli report --run-dir runs/smallcap_best_paper
 已加入 GitHub Actions 自动任务，说明见 [docs/github-automation.md](/home/chery/Documents/Quant/docs/github-automation.md)。
 
 - 收盘后选股：`reports/daily/YYYYMMDD/`
-- 盘中 5 分钟观察：`reports/intraday/YYYYMMDD/HHMM/`
+- 盘中 5 分钟观察：`reports/intraday/YYYYMMDD/`，状态变化时追加到 `events.csv`
 
-这些任务用于研究、复盘和模拟跟踪，不直接执行真实下单。
+这些任务用于研究、复盘和模拟跟踪，不直接执行真实下单。自动任务会跳过 A 股非交易日；模拟成交默认按策略信号成交成功记账，后续接真实账号时再由本机实盘程序根据盘口和券商成交回报确认。
+
+## 本地虚拟实盘
+
+已加入本地虚拟实盘入口，说明见 [docs/local-paper-live.md](/home/chery/Documents/Quant/docs/local-paper-live.md)。当前配置使用 100000 RMB 初始资金：
+
+```bash
+source .venv/bin/activate
+python -m automation.run_local_paper_live --config configs/smallcap_live.yaml
+```
+
+账本默认写入 `local_runs/paper_live/`，包含账户、持仓、成交、权益曲线和每日决策。该目录默认不提交到 GitHub。
+
+本地定时任务安装：
+
+```bash
+bash scripts/install_local_paper_cron.sh
+```
+
+安装后本机会在 16:15 收盘后跑虚拟实盘/复盘，并在 A 股正式交易时段 `09:30-11:30`、`13:00-15:00` 每 5 分钟盯实时盘口；脚本内部会自动跳过节假日和非交易时间。
 
 仅供工程学习和研究验证，不构成投资建议。

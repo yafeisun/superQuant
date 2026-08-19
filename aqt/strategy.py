@@ -67,7 +67,12 @@ class SmallCapMomentumStrategy(Strategy):
         self.target_gross_exposure = config.target_gross_exposure
         self.min_momentum = config.min_momentum
         self.min_trade_value = config.min_trade_value
-        self.history: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=self.momentum_window + 1))
+        self.support_window = config.support_window
+        self.target_window = config.target_window
+        self.trend_window = config.trend_window
+        self.risk_reward_ratio = config.risk_reward_ratio
+        history_window = max(self.momentum_window, self.target_window, self.support_window, self.trend_window) + 1
+        self.history: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=history_window))
         self.day_index = 0
 
     def on_bars(self, bars: Iterable[Bar], account: Account) -> List[Order]:
@@ -76,24 +81,27 @@ class SmallCapMomentumStrategy(Strategy):
             self.history[bar.symbol].append(bar.close)
 
         self.day_index += 1
-        if self.day_index < self.momentum_window or self.day_index % self.rebalance_interval != 0:
-            return []
-
         bars_by_symbol = {bar.symbol: bar for bar in bar_list}
+        orders = self._risk_exit_orders(account, bars_by_symbol)
+        exited_symbols = {order.symbol for order in orders}
+        if self.day_index < self.momentum_window or self.day_index % self.rebalance_interval != 0:
+            return orders
+
         ranked = sorted(self._scores(bars_by_symbol), key=lambda item: item[1], reverse=True)
         selected = [symbol for symbol, score in ranked if score >= self.min_momentum][: self.top_n]
         if not selected:
-            return self._sell_all(account, bars_by_symbol, "risk_off")
+            return orders + self._sell_all(account, bars_by_symbol, "risk_off", exited_symbols)
 
         equity = account.equity()
         target_value_per_name = equity * self.target_gross_exposure / len(selected)
-        orders: List[Order] = []
 
         for symbol, position in account.positions.items():
-            if position.quantity > 0 and symbol not in selected and symbol in bars_by_symbol:
+            if position.quantity > 0 and symbol not in selected and symbol in bars_by_symbol and symbol not in exited_symbols:
                 orders.append(Order(symbol, Side.SELL, position.quantity, bars_by_symbol[symbol].date, "rebalance_sell"))
 
         for symbol in selected:
+            if symbol in exited_symbols:
+                continue
             bar = bars_by_symbol[symbol]
             position = account.positions.get(symbol)
             current_qty = position.quantity if position else 0
@@ -108,6 +116,41 @@ class SmallCapMomentumStrategy(Strategy):
 
         return orders
 
+    def _risk_exit_orders(self, account: Account, bars_by_symbol: Dict[str, Bar]) -> List[Order]:
+        orders: List[Order] = []
+        for symbol, position in account.positions.items():
+            if position.quantity <= 0 or position.avg_cost <= 0 or symbol not in bars_by_symbol:
+                continue
+            bar = bars_by_symbol[symbol]
+            levels = self._technical_levels(symbol)
+            if not levels:
+                continue
+            support_level, resistance_level, trend_slope = levels
+            upside_target_level = max(
+                resistance_level,
+                position.avg_cost + max(position.avg_cost - support_level, 0.0) * self.risk_reward_ratio,
+            )
+            if bar.close < support_level and trend_slope < 0:
+                orders.append(Order(symbol, Side.SELL, position.quantity, bar.date, "support_break_trend_down"))
+            elif bar.close >= upside_target_level and trend_slope <= 0:
+                orders.append(Order(symbol, Side.SELL, position.quantity, bar.date, "target_reached_trend_fade"))
+        return orders
+
+    def _technical_levels(self, symbol: str) -> tuple[float, float, float] | None:
+        closes = list(self.history[symbol])
+        min_required = max(self.support_window, self.trend_window) + 1
+        if len(closes) < min_required:
+            return None
+        support_values = closes[-self.support_window - 1 : -1]
+        target_values = closes[-min(self.target_window, len(closes) - 1) - 1 : -1]
+        if not support_values or not target_values:
+            return None
+        support_level = min(support_values)
+        resistance_level = max(target_values)
+        trend_values = closes[-self.trend_window - 1 :]
+        trend_slope = trend_values[-1] / trend_values[0] - 1.0 if trend_values[0] > 0 else 0.0
+        return support_level, resistance_level, trend_slope
+
     def _scores(self, bars_by_symbol: Dict[str, Bar]) -> List[tuple[str, float]]:
         scores: List[tuple[str, float]] = []
         for symbol in bars_by_symbol:
@@ -121,10 +164,17 @@ class SmallCapMomentumStrategy(Strategy):
             scores.append((symbol, momentum))
         return scores
 
-    def _sell_all(self, account: Account, bars_by_symbol: Dict[str, Bar], reason: str) -> List[Order]:
+    def _sell_all(
+        self,
+        account: Account,
+        bars_by_symbol: Dict[str, Bar],
+        reason: str,
+        excluded_symbols: set[str] | None = None,
+    ) -> List[Order]:
+        excluded_symbols = excluded_symbols or set()
         orders: List[Order] = []
         for symbol, position in account.positions.items():
-            if position.quantity > 0 and symbol in bars_by_symbol:
+            if position.quantity > 0 and symbol in bars_by_symbol and symbol not in excluded_symbols:
                 orders.append(Order(symbol, Side.SELL, position.quantity, bars_by_symbol[symbol].date, reason))
         return orders
 

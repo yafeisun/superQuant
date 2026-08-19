@@ -17,6 +17,21 @@ risk:
   lot_size: 100
   enforce_t1: true
 
+health:
+  enabled: true
+  path: data/health/latest.csv
+  min_turnover_rate: 0.5
+  min_amount: 30000000
+  min_pe: 0
+  max_pe: 120
+  min_float_market_cap: 1000000000
+  max_float_market_cap: 20000000000
+  min_health_score: 60
+  exclude_st: true
+  exclude_suspended: true
+  exclude_limit_up: true
+  exclude_limit_down: false
+
 strategy:
   name: small_cap_momentum
   momentum_window: 60
@@ -25,6 +40,10 @@ strategy:
   target_gross_exposure: 0.85
   min_momentum: 0.00
   min_trade_value: 8000
+  support_window: 20
+  target_window: 60
+  trend_window: 5
+  risk_reward_ratio: 2.0
 
 output:
   backtest_dir: runs/smallcap_backtest
