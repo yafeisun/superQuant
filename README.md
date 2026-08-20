@@ -73,7 +73,10 @@ source .venv/bin/activate
 python -m aqt.cli fetch-akshare --config configs/smallcap_best.yaml --adjust qfq
 python -m aqt.cli paper-run --config configs/smallcap_best.yaml
 python -m aqt.cli report --run-dir runs/smallcap_best_paper
+python -m aqt.cli history-report --run-dir runs/smallcap_best_paper --output /tmp/smallcap_best_paper_history.html
 ```
+
+`history-report` 会把 `positions.csv`、`equity.csv`、`fills.csv` 和 `trades.csv` 生成一个按股票展开的 HTML 历史看板。
 
 ## GitHub 自动化
 

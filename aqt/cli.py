@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .config import load_config
 from .data import fetch_akshare_daily, fetch_small_cap_universe, generate_sample_data
+from .history import generate_history_report
 from .engine import run_backtest, run_paper
 from .optimize import optimize_small_cap_strategy
 from .signals import generate_daily_signal
@@ -47,6 +48,10 @@ def main() -> None:
     report = subparsers.add_parser("report", help="print summary metrics from a run directory")
     report.add_argument("--run-dir", default="runs/smallcap_backtest")
 
+    history = subparsers.add_parser("history-report", help="generate an HTML history report from a run directory")
+    history.add_argument("--run-dir", default="runs/smallcap_best_paper")
+    history.add_argument("--output", default=None)
+
     signal = subparsers.add_parser("daily-signal", help="generate after-close signal and next-day order plan")
     signal.add_argument("--config", default="configs/smallcap_best.yaml")
     signal.add_argument("--output", default="runs/daily_signal")
@@ -65,6 +70,12 @@ def main() -> None:
             return
         if args.command == "report":
             _print_report(Path(args.run_dir))
+            return
+        if args.command == "history-report":
+            run_dir = Path(args.run_dir)
+            output = Path(args.output) if args.output else Path("reports/history") / f"{run_dir.name}.html"
+            path = generate_history_report(run_dir, output)
+            print(path)
             return
 
         config = load_config(args.config)
