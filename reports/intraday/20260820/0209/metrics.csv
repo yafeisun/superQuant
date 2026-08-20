@@ -1,0 +1,2 @@
+status,start_date,end_date,start_equity,end_equity,total_return,max_drawdown,fills,closed_trades,winning_trades,win_rate,total_cost,rejections
+ok,2021-01-04,2026-08-20,1000000.0,1259599.49,0.259599,-0.453725,504,325,158,0.486154,33019.1452,32
