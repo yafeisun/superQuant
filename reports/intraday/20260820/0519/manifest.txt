@@ -1,0 +1,5 @@
+job_type: intraday_watch
+config: configs/smallcap_best.yaml
+snapshot_date: 20260820
+snapshot_time: 0519
+generated_at: 2026-08-20T05:21:08
