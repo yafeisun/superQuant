@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .config import load_config
 from .data import fetch_akshare_daily, fetch_small_cap_universe, generate_sample_data
-from .history import generate_history_report
+from .history import generate_account_activity_markdown, generate_history_report, update_readme_account_activity
 from .engine import run_backtest, run_paper
 from .optimize import optimize_small_cap_strategy
 from .signals import generate_daily_signal
@@ -52,6 +52,12 @@ def main() -> None:
     history.add_argument("--run-dir", default="runs/smallcap_best_paper")
     history.add_argument("--output", default=None)
 
+    activity = subparsers.add_parser("account-activity", help="generate a Markdown account activity snapshot")
+    activity.add_argument("--state-dir", default="local_runs/paper_live")
+    activity.add_argument("--output", default="reports/account_activity.md")
+    activity.add_argument("--update-readme", nargs="?", const="README.md", default=None)
+    activity.add_argument("--max-rows", type=int, default=120)
+
     signal = subparsers.add_parser("daily-signal", help="generate after-close signal and next-day order plan")
     signal.add_argument("--config", default="configs/smallcap_best.yaml")
     signal.add_argument("--output", default="runs/daily_signal")
@@ -76,6 +82,13 @@ def main() -> None:
             output = Path(args.output) if args.output else Path("reports/history") / f"{run_dir.name}.html"
             path = generate_history_report(run_dir, output)
             print(path)
+            return
+        if args.command == "account-activity":
+            path = generate_account_activity_markdown(Path(args.state_dir), Path(args.output), args.max_rows)
+            print(path)
+            if args.update_readme:
+                readme_path = update_readme_account_activity(Path(args.update_readme), path.read_text(encoding="utf-8"))
+                print(readme_path)
             return
 
         config = load_config(args.config)

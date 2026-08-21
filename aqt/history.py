@@ -8,6 +8,10 @@ from typing import Callable
 import pandas as pd
 
 
+README_ACTIVITY_START = "<!-- account-activity:start -->"
+README_ACTIVITY_END = "<!-- account-activity:end -->"
+
+
 @dataclass
 class RunFrames:
     run_dir: Path
@@ -33,6 +37,172 @@ def generate_history_report(run_dir: Path, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
     return output_path
+
+
+def generate_account_activity_markdown(state_dir: Path, output_path: Path, max_rows: int = 120) -> Path:
+    markdown = build_account_activity_markdown(state_dir, max_rows=max_rows)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(markdown, encoding="utf-8")
+    return output_path
+
+
+def update_readme_account_activity(readme_path: Path, markdown: str) -> Path:
+    content = readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
+    block = f"{README_ACTIVITY_START}\n{markdown.strip()}\n{README_ACTIVITY_END}"
+
+    if README_ACTIVITY_START in content and README_ACTIVITY_END in content:
+        before, rest = content.split(README_ACTIVITY_START, 1)
+        _, after = rest.split(README_ACTIVITY_END, 1)
+        content = f"{before}{block}{after}"
+    else:
+        suffix = "\n" if content.endswith("\n") or not content else "\n\n"
+        content = f"{content}{suffix}{block}\n"
+
+    readme_path.write_text(content, encoding="utf-8")
+    return readme_path
+
+
+def build_account_activity_markdown(state_dir: Path, max_rows: int = 120) -> str:
+    positions = _latest_position_snapshot(_read_csv(state_dir / "positions.csv"))
+    fills = _normalize_fills(_read_csv(state_dir / "fills.csv"))
+    equity = _latest_equity_snapshot(_read_csv(state_dir / "equity.csv"))
+    latest_date = _latest_activity_date(positions, fills, equity)
+
+    lines = [
+        "### 账户实际操作和持仓",
+        "",
+        f"数据源：`{state_dir.as_posix()}`。原始账本目录默认不提交，README 只保存这份摘要快照。",
+        "",
+    ]
+    if latest_date:
+        lines.extend([f"最新数据日期：`{latest_date}`。", ""])
+
+    if equity:
+        lines.extend(
+            [
+                "#### 账户概览",
+                "",
+                _render_markdown_table(
+                    ["日期", "现金", "持仓市值", "账户权益", "已实现盈亏", "收益率", "累计成交"],
+                    [
+                        [
+                            _fmt_md_date(equity.get("date")),
+                            _fmt_md_money(equity.get("cash")),
+                            _fmt_md_money(equity.get("market_value")),
+                            _fmt_md_money(equity.get("equity")),
+                            _fmt_md_money(equity.get("realized_pnl")),
+                            _fmt_md_pct(equity.get("return_pct")),
+                            _fmt_md_int(len(fills)),
+                        ]
+                    ],
+                ),
+                "",
+            ]
+        )
+
+    symbol_rows = _account_symbol_rows(positions, fills)
+    lines.extend(["#### 每个股票的实际操作和实际持仓", ""])
+    if symbol_rows:
+        lines.extend(
+            [
+                _render_markdown_table(
+                    [
+                        "股票",
+                        "最近实际操作",
+                        "操作日期",
+                        "累计买入",
+                        "累计卖出",
+                        "当前持仓",
+                        "可卖",
+                        "成本价",
+                        "现价",
+                        "市值",
+                        "浮盈亏",
+                        "收益率",
+                    ],
+                    [
+                        [
+                            row["symbol"],
+                            row["last_action"],
+                            row["last_action_date"],
+                            row["buy_qty"],
+                            row["sell_qty"],
+                            row["quantity"],
+                            row["available_to_sell"],
+                            row["avg_cost"],
+                            row["last_price"],
+                            row["market_value"],
+                            row["unrealized_pnl"],
+                            row["return_pct"],
+                        ]
+                        for row in symbol_rows
+                    ],
+                ),
+                "",
+            ]
+        )
+    else:
+        lines.extend(["暂无持仓或成交记录。", ""])
+
+    daily_rows = _account_daily_operation_rows(fills)
+    lines.extend(["#### 每日按股票实际成交", ""])
+    if daily_rows:
+        visible_rows = daily_rows[:max_rows]
+        lines.extend(
+            [
+                _render_markdown_table(
+                    ["日期", "股票", "方向", "买入股数", "买入均价", "卖出股数", "卖出均价", "成交次数", "原因"],
+                    [
+                        [
+                            row["date"],
+                            row["symbol"],
+                            row["side"],
+                            row["buy_qty"],
+                            row["buy_avg_price"],
+                            row["sell_qty"],
+                            row["sell_avg_price"],
+                            row["fills"],
+                            row["reasons"],
+                        ]
+                        for row in visible_rows
+                    ],
+                ),
+                "",
+            ]
+        )
+        if len(daily_rows) > max_rows:
+            lines.extend([f"只显示最近 `{max_rows}` 行，完整记录见 `fills.csv`。", ""])
+    else:
+        lines.extend(["暂无实际成交。", ""])
+
+    fill_rows = _recent_fill_rows(fills, max_rows)
+    lines.extend(["#### 最近实际成交明细", ""])
+    if fill_rows:
+        lines.extend(
+            [
+                _render_markdown_table(
+                    ["日期", "股票", "方向", "数量", "成交价", "手续费", "印花税", "原因"],
+                    [
+                        [
+                            row["date"],
+                            row["symbol"],
+                            row["side"],
+                            row["quantity"],
+                            row["price"],
+                            row["commission"],
+                            row["tax"],
+                            row["reason"],
+                        ]
+                        for row in fill_rows
+                    ],
+                ),
+                "",
+            ]
+        )
+    else:
+        lines.extend(["暂无实际成交明细。", ""])
+
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _load_run_frames(run_dir: Path) -> RunFrames:
@@ -62,6 +232,261 @@ def _read_text(path: Path) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8")
+
+
+def _latest_position_snapshot(positions: pd.DataFrame) -> pd.DataFrame:
+    if positions.empty or "symbol" not in positions.columns:
+        return pd.DataFrame()
+    quantity_col = "quantity" if "quantity" in positions.columns else "position_qty" if "position_qty" in positions.columns else ""
+    if not quantity_col:
+        return pd.DataFrame()
+
+    frame = positions.copy()
+    frame["symbol"] = frame["symbol"].astype(str)
+    frame[quantity_col] = pd.to_numeric(frame[quantity_col], errors="coerce").fillna(0.0)
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+        latest_date = frame["date"].max()
+        if pd.notna(latest_date):
+            frame = frame[frame["date"] == latest_date]
+    frame = frame[frame[quantity_col] > 0].copy()
+    if quantity_col != "quantity":
+        frame["quantity"] = frame[quantity_col]
+    return frame.sort_values("symbol").reset_index(drop=True)
+
+
+def _latest_equity_snapshot(equity: pd.DataFrame) -> dict:
+    if equity.empty:
+        return {}
+    frame = equity.copy()
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+        frame = frame.sort_values("date")
+    return frame.iloc[-1].to_dict()
+
+
+def _latest_activity_date(positions: pd.DataFrame, fills: pd.DataFrame, equity: dict) -> str:
+    dates = []
+    if not positions.empty and "date" in positions.columns:
+        dates.extend(pd.to_datetime(positions["date"], errors="coerce").dropna().tolist())
+    if not fills.empty and "date" in fills.columns:
+        dates.extend(pd.to_datetime(fills["date"], errors="coerce").dropna().tolist())
+    if equity.get("date") is not None and equity.get("date") != "":
+        date_value = pd.to_datetime(equity.get("date"), errors="coerce")
+        if pd.notna(date_value):
+            dates.append(date_value)
+    if not dates:
+        return ""
+    return pd.to_datetime(max(dates)).strftime("%Y-%m-%d")
+
+
+def _account_symbol_rows(positions: pd.DataFrame, fills: pd.DataFrame) -> list[dict]:
+    symbols = set()
+    if not positions.empty and "symbol" in positions.columns:
+        symbols.update(positions["symbol"].astype(str).tolist())
+    if not fills.empty and "symbol" in fills.columns:
+        symbols.update(fills["symbol"].astype(str).tolist())
+
+    rows = []
+    for symbol in sorted(symbols):
+        position_row = {}
+        if not positions.empty:
+            matches = positions[positions["symbol"].astype(str) == symbol]
+            if not matches.empty:
+                position_row = matches.iloc[-1].to_dict()
+        symbol_fills = fills[fills["symbol"].astype(str) == symbol].copy() if not fills.empty else pd.DataFrame()
+        if not symbol_fills.empty:
+            symbol_fills = symbol_fills.sort_values("date")
+            last_fill = symbol_fills.iloc[-1].to_dict()
+            last_action = _translate_side(last_fill.get("side"))
+            last_action_date = _fmt_md_date(last_fill.get("date"))
+            buy_qty = _side_quantity(symbol_fills, "BUY")
+            sell_qty = _side_quantity(symbol_fills, "SELL")
+        else:
+            last_action = "持有" if _number(position_row.get("quantity")) > 0 else "无成交"
+            last_action_date = _fmt_md_date(position_row.get("date"))
+            buy_qty = 0.0
+            sell_qty = 0.0
+
+        rows.append(
+            {
+                "symbol": symbol,
+                "last_action": last_action,
+                "last_action_date": last_action_date,
+                "buy_qty": _fmt_md_int(buy_qty),
+                "sell_qty": _fmt_md_int(sell_qty),
+                "quantity": _fmt_md_int(position_row.get("quantity")),
+                "available_to_sell": _fmt_md_int(position_row.get("available_to_sell")),
+                "avg_cost": _fmt_md_money_4(position_row.get("avg_cost")),
+                "last_price": _fmt_md_money_4(position_row.get("last_price")),
+                "market_value": _fmt_md_money(position_row.get("market_value")),
+                "unrealized_pnl": _fmt_md_money(position_row.get("unrealized_pnl")),
+                "return_pct": _fmt_md_pct(position_row.get("return_pct")),
+            }
+        )
+    return rows
+
+
+def _account_daily_operation_rows(fills: pd.DataFrame) -> list[dict]:
+    if fills.empty or "date" not in fills.columns or "symbol" not in fills.columns:
+        return []
+
+    rows = []
+    frame = fills.copy()
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+    frame = frame.dropna(subset=["date"])
+    frame["symbol"] = frame["symbol"].astype(str)
+    for (date_value, symbol), group in frame.groupby(["date", "symbol"], sort=False):
+        buy_qty = _side_quantity(group, "BUY")
+        sell_qty = _side_quantity(group, "SELL")
+        buy_value = _side_notional(group, "BUY")
+        sell_value = _side_notional(group, "SELL")
+        sides = [_translate_side(side) for side in sorted(group["side"].astype(str).str.upper().unique())] if "side" in group.columns else []
+        reasons = _unique_join(group["reason"].tolist()) if "reason" in group.columns else ""
+        rows.append(
+            {
+                "date": _fmt_md_date(date_value),
+                "symbol": symbol,
+                "side": "/".join(side for side in sides if side),
+                "buy_qty": _fmt_md_int(buy_qty),
+                "buy_avg_price": _fmt_md_money_4(buy_value / buy_qty if buy_qty else ""),
+                "sell_qty": _fmt_md_int(sell_qty),
+                "sell_avg_price": _fmt_md_money_4(sell_value / sell_qty if sell_qty else ""),
+                "fills": _fmt_md_int(len(group)),
+                "reasons": reasons,
+            }
+        )
+    return sorted(rows, key=lambda row: (row["date"], row["symbol"]), reverse=True)
+
+
+def _recent_fill_rows(fills: pd.DataFrame, max_rows: int) -> list[dict]:
+    if fills.empty:
+        return []
+    frame = fills.copy()
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.normalize()
+        frame = frame.sort_values(["date", "symbol"], ascending=[False, True])
+    return [
+        {
+            "date": _fmt_md_date(row.get("date")),
+            "symbol": str(row.get("symbol", "")),
+            "side": _translate_side(row.get("side")),
+            "quantity": _fmt_md_int(row.get("quantity")),
+            "price": _fmt_md_money_4(row.get("price")),
+            "commission": _fmt_md_money_4(row.get("commission")),
+            "tax": _fmt_md_money_4(row.get("tax")),
+            "reason": _md_cell(row.get("reason")),
+        }
+        for row in frame.head(max_rows).to_dict(orient="records")
+    ]
+
+
+def _side_quantity(frame: pd.DataFrame, side: str) -> float:
+    if frame.empty or "side" not in frame.columns or "quantity" not in frame.columns:
+        return 0.0
+    matched = frame[frame["side"].astype(str).str.upper() == side]
+    if matched.empty:
+        return 0.0
+    return float(pd.to_numeric(matched["quantity"], errors="coerce").fillna(0.0).sum())
+
+
+def _side_notional(frame: pd.DataFrame, side: str) -> float:
+    if frame.empty or "side" not in frame.columns or "quantity" not in frame.columns or "price" not in frame.columns:
+        return 0.0
+    matched = frame[frame["side"].astype(str).str.upper() == side]
+    if matched.empty:
+        return 0.0
+    quantity = pd.to_numeric(matched["quantity"], errors="coerce").fillna(0.0)
+    price = pd.to_numeric(matched["price"], errors="coerce").fillna(0.0)
+    return float((quantity * price).sum())
+
+
+def _unique_join(values: list) -> str:
+    seen = []
+    for value in values:
+        if _is_blank(value):
+            continue
+        text = str(value)
+        if text not in seen:
+            seen.append(text)
+    return "; ".join(seen)
+
+
+def _translate_side(value) -> str:
+    if _is_blank(value):
+        return ""
+    side = str(value).upper()
+    if side == "BUY":
+        return "买入"
+    if side == "SELL":
+        return "卖出"
+    return side
+
+
+def _render_markdown_table(headers: list[str], rows: list[list[object]]) -> str:
+    parts = [
+        "| " + " | ".join(_md_cell(header) for header in headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in rows:
+        parts.append("| " + " | ".join(_md_cell(value) for value in row) + " |")
+    return "\n".join(parts)
+
+
+def _md_cell(value) -> str:
+    if _is_blank(value):
+        return ""
+    return str(value).replace("\n", " ").replace("|", "\\|")
+
+
+def _fmt_md_date(value) -> str:
+    if _is_blank(value):
+        return ""
+    date_value = pd.to_datetime(value, errors="coerce")
+    if pd.isna(date_value):
+        return ""
+    return date_value.strftime("%Y-%m-%d")
+
+
+def _fmt_md_int(value) -> str:
+    if _is_blank(value):
+        return ""
+    return f"{int(round(float(value))):,}"
+
+
+def _fmt_md_money(value) -> str:
+    if _is_blank(value):
+        return ""
+    return f"{float(value):,.2f}"
+
+
+def _fmt_md_money_4(value) -> str:
+    if _is_blank(value):
+        return ""
+    return f"{float(value):,.4f}"
+
+
+def _fmt_md_pct(value) -> str:
+    if _is_blank(value):
+        return ""
+    return f"{float(value):.2%}"
+
+
+def _number(value) -> float:
+    if _is_blank(value):
+        return 0.0
+    return float(value)
+
+
+def _is_blank(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value == ""
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
 
 
 def _build_position_history(positions: pd.DataFrame, equity: pd.DataFrame) -> pd.DataFrame:
