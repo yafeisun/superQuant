@@ -15,9 +15,13 @@ from aqt.broker import PaperBroker
 from aqt.calendar import is_a_share_trading_day, parse_calendar_date
 from aqt.config import AppConfig, load_config
 from aqt.data import fetch_akshare_daily, load_market_data
+from aqt.factors import load_external_factors
+from aqt.flow import fetch_money_flow, load_money_flow
 from aqt.health import fetch_stock_health, healthy_symbols, load_stock_health
+from aqt.live_rules import screen_buy_orders, sell_point_orders
 from aqt.models import Account, Bar, Fill, Order, Position, Side
 from aqt.quotes import Quote, fetch_realtime_quotes
+from aqt.selection import build_selection_candidates
 
 
 def main() -> None:
@@ -30,6 +34,7 @@ def main() -> None:
     parser.add_argument("--interval-sec", type=int, default=300)
     parser.add_argument("--loop", action="store_true", help="keep running during A-share trading hours")
     parser.add_argument("--no-fetch", action="store_true", help="skip daily-bar refresh before quote watch")
+    parser.add_argument("--no-refresh-factors", action="store_true", help="use cached health and money-flow factors")
     parser.add_argument("--force", action="store_true", help="run outside trading day/hour checks")
     args = parser.parse_args()
 
@@ -55,14 +60,24 @@ def run_once(args: argparse.Namespace) -> bool:
     config = _with_market_end(load_config(args.config), args.market_end or target_date.isoformat())
     state_dir = Path(args.state_dir)
     state_dir.mkdir(parents=True, exist_ok=True)
+    account = _load_account(state_dir / "account.json", config)
+    config = _with_symbols(config, _effective_symbols(config, account))
 
     if not args.no_fetch:
         fetch_akshare_daily(config.data.path, config.data.symbols, config.data.start, config.data.end, args.adjust)
 
-    health = _refresh_health(config)
-    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end)
-    account = _load_account(state_dir / "account.json", config)
-    target_symbols = _watch_symbols(config, market_data, target_date, account, health)
+    health = load_stock_health(config.health.path) if args.no_refresh_factors else _refresh_health(config)
+    flow = load_money_flow(config.flow.path) if args.no_refresh_factors else _refresh_money_flow(config)
+    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end, strict=False)
+    factors = load_external_factors(config.factors, config.data.symbols, target_date)
+    selection_candidates = build_selection_candidates(config, market_data, target_date, health, flow, factors)
+    day_dir = state_dir / "decisions" / target_date.strftime("%Y%m%d")
+    day_dir.mkdir(parents=True, exist_ok=True)
+    if not selection_candidates.empty:
+        selection_candidates.to_csv(day_dir / "intraday_selection_candidates.csv", index=False)
+    if not factors.empty:
+        factors.to_csv(day_dir / "intraday_external_factors.csv", index=False)
+    target_symbols = _watch_symbols(config, market_data, target_date, account, health, selection_candidates)
     quotes = fetch_realtime_quotes(target_symbols)
     if not quotes:
         print("skip: no realtime quotes loaded")
@@ -72,8 +87,20 @@ def run_once(args: argparse.Namespace) -> bool:
     broker.account = account
     _mark_quotes(broker.account, quotes)
     allow_initial_entry = not _has_sell_fill_today(state_dir / "fills.csv", target_date)
-    orders = _intraday_orders(config, market_data, target_date, broker.account, quotes, health, allow_initial_entry)
-    fills = broker.execute_orders(orders, _quote_bars(quotes, target_date))
+    quote_bars = _quote_bars(quotes, target_date)
+    orders = _intraday_orders(
+        config,
+        market_data,
+        target_date,
+        broker.account,
+        quotes,
+        health,
+        flow,
+        factors,
+        selection_candidates,
+        allow_initial_entry,
+    )
+    fills = broker.execute_orders(orders, quote_bars)
     _mark_quotes(broker.account, quotes)
     _save_account(state_dir / "account.json", broker.account)
     _append_rows(state_dir / "fills.csv", [_fill_row(fill) for fill in fills])
@@ -95,13 +122,34 @@ def _with_market_end(config: AppConfig, market_end: str) -> AppConfig:
     return replace(config, data=replace(config.data, end=market_end))
 
 
+def _with_symbols(config: AppConfig, symbols: list[str]) -> AppConfig:
+    return replace(config, data=replace(config.data, symbols=symbols))
+
+
+def _effective_symbols(config: AppConfig, account: Account) -> list[str]:
+    symbols = set(config.data.symbols)
+    symbols.update(symbol for symbol, position in account.positions.items() if position.quantity > 0)
+    return sorted(symbols)
+
+
 def _refresh_health(config: AppConfig) -> pd.DataFrame:
     if not config.health.enabled:
         return load_stock_health(config.health.path)
     try:
-        return fetch_stock_health(config.data.symbols, config.health.path)
+        refreshed = fetch_stock_health(config.data.symbols, config.health.path)
+        return refreshed if not refreshed.empty else load_stock_health(config.health.path)
     except Exception:
         return load_stock_health(config.health.path)
+
+
+def _refresh_money_flow(config: AppConfig) -> pd.DataFrame:
+    if not config.flow.enabled:
+        return load_money_flow(config.flow.path)
+    try:
+        refreshed = fetch_money_flow(config.data.symbols, config.flow.path, config.flow.lookback_days)
+        return refreshed if not refreshed.empty else load_money_flow(config.flow.path)
+    except Exception:
+        return load_money_flow(config.flow.path)
 
 
 def _watch_symbols(
@@ -110,11 +158,18 @@ def _watch_symbols(
     target_date: date,
     account: Account,
     health: pd.DataFrame,
+    selection_candidates: pd.DataFrame,
 ) -> list[str]:
     position_symbols = [symbol for symbol, position in account.positions.items() if position.quantity > 0]
-    allowed = set(healthy_symbols(config.data.symbols, health, config.health))
-    ranked = [symbol for symbol in _ranked_symbols(config, market_data, target_date) if symbol in allowed]
-    return sorted(set(position_symbols + ranked[: config.strategy.top_n]))
+    if not selection_candidates.empty:
+        ranked = selection_candidates.head(config.strategy.top_n * max(config.strategy.entry_candidate_multiplier, 1))[
+            "symbol"
+        ].astype(str).tolist()
+    else:
+        allowed = set(healthy_symbols(config.data.symbols, health, config.health))
+        ranked = [symbol for symbol in _ranked_symbols(config, market_data, target_date) if symbol in allowed]
+    limit = config.strategy.top_n * max(config.strategy.entry_candidate_multiplier, 1)
+    return sorted(set(position_symbols + ranked[:limit]))
 
 
 def _ranked_symbols(config: AppConfig, market_data: dict[str, pd.DataFrame], target_date: date) -> list[str]:
@@ -140,37 +195,48 @@ def _intraday_orders(
     account: Account,
     quotes: dict[str, Quote],
     health: pd.DataFrame,
+    flow: pd.DataFrame,
+    factors: pd.DataFrame,
+    selection_candidates: pd.DataFrame,
     allow_initial_entry: bool,
 ) -> list[Order]:
-    orders: list[Order] = []
-    for symbol, position in account.positions.items():
-        quote = quotes.get(symbol)
-        if not quote or position.quantity <= 0 or position.avg_cost <= 0:
-            continue
-        levels = _technical_levels(config, market_data, symbol, target_date, quote.price, position.avg_cost)
-        if not levels:
-            continue
-        support_level, upside_target_level, trend_slope = levels
-        if quote.price < support_level and trend_slope < 0:
-            orders.append(Order(symbol, Side.SELL, position.quantity, target_date, "intraday_support_break", quote.price))
-        elif quote.price >= upside_target_level and trend_slope <= 0:
-            orders.append(Order(symbol, Side.SELL, position.quantity, target_date, "intraday_target_fade", quote.price))
+    quote_bars = _quote_bars(quotes, target_date)
+    orders, _ = sell_point_orders(account, quote_bars, market_data, target_date, health, flow, config, factors)
 
     if any(position.quantity > 0 for position in account.positions.values()) or not allow_initial_entry:
         return orders
 
-    allowed = set(healthy_symbols(config.data.symbols, health, config.health))
-    selected = [symbol for symbol in _ranked_symbols(config, market_data, target_date) if symbol in quotes and symbol in allowed][
-        : config.strategy.top_n
-    ]
-    if not selected:
-        return orders
-    target_value_per_name = account.equity() * config.strategy.target_gross_exposure / len(selected)
-    for symbol in selected:
+    buy_orders = _intraday_selection_orders(config, selection_candidates, quotes, account, target_date)
+    buy_orders, _ = screen_buy_orders(buy_orders, health, flow, config, market_data, target_date, quote_bars, factors)
+    return orders + buy_orders[: config.strategy.top_n]
+
+
+def _intraday_selection_orders(
+    config: AppConfig,
+    selection_candidates: pd.DataFrame,
+    quotes: dict[str, Quote],
+    account: Account,
+    target_date: date,
+) -> list[Order]:
+    if selection_candidates.empty:
+        return []
+    selected = selection_candidates[selection_candidates["buy_decision"].astype(str) == "BUY_READY"]
+    if selected.empty:
+        return []
+    target_value_per_name = account.equity() * config.strategy.target_gross_exposure / config.strategy.top_n
+    orders: list[Order] = []
+    for row in selected.to_dict(orient="records"):
+        symbol = str(row.get("symbol", ""))
+        if symbol not in quotes:
+            continue
         quote = quotes[symbol]
         if target_value_per_name < config.strategy.min_trade_value:
             continue
-        orders.append(Order(symbol, Side.BUY, int(target_value_per_name / quote.price), target_date, "intraday_initial_entry", quote.price))
+        orders.append(
+            Order(symbol, Side.BUY, int(target_value_per_name / quote.price), target_date, "intraday_full_selection_buy", quote.price)
+        )
+        if len(orders) >= config.strategy.top_n:
+            break
     return orders
 
 

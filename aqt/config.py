@@ -51,6 +51,29 @@ class HealthConfig:
 
 
 @dataclass(frozen=True)
+class FlowConfig:
+    enabled: bool
+    path: Path
+    lookback_days: int
+    min_positive_days: int
+    min_main_net_inflow_ratio: float
+    min_main_net_inflow_amount: float
+    max_age_days: int
+
+
+@dataclass(frozen=True)
+class FactorConfig:
+    enabled: bool
+    event_path: Path
+    macro_path: Path
+    event_lookback_days: int
+    min_event_confidence: float
+    negative_event_score_block: float
+    macro_risk_score_block: float
+    max_score_adjustment: float
+
+
+@dataclass(frozen=True)
 class StrategyConfig:
     name: str
     short_window: int
@@ -66,6 +89,11 @@ class StrategyConfig:
     target_window: int
     trend_window: int
     risk_reward_ratio: float
+    entry_candidate_multiplier: int
+    entry_max_above_support_pct: float
+    entry_min_below_target_pct: float
+    entry_max_recent_runup_pct: float
+    entry_min_trend_slope: float
 
 
 @dataclass(frozen=True)
@@ -80,6 +108,8 @@ class AppConfig:
     account: AccountConfig
     risk: RiskConfig
     health: HealthConfig
+    flow: FlowConfig
+    factors: FactorConfig
     strategy: StrategyConfig
     output: OutputConfig
 
@@ -93,6 +123,8 @@ def load_config(path: str | Path) -> AppConfig:
     account = raw["account"]
     risk = raw["risk"]
     health = raw.get("health", {})
+    flow = raw.get("flow", {})
+    factors = raw.get("factors", {})
     strategy = raw["strategy"]
     output = raw["output"]
 
@@ -138,6 +170,25 @@ def load_config(path: str | Path) -> AppConfig:
             exclude_limit_up=bool(health.get("exclude_limit_up", True)),
             exclude_limit_down=bool(health.get("exclude_limit_down", False)),
         ),
+        flow=FlowConfig(
+            enabled=bool(flow.get("enabled", False)),
+            path=Path(flow.get("path", "data/flow/latest.csv")),
+            lookback_days=int(flow.get("lookback_days", 5)),
+            min_positive_days=int(flow.get("min_positive_days", 3)),
+            min_main_net_inflow_ratio=float(flow.get("min_main_net_inflow_ratio", 0.0)),
+            min_main_net_inflow_amount=float(flow.get("min_main_net_inflow_amount", 0.0)),
+            max_age_days=int(flow.get("max_age_days", 7)),
+        ),
+        factors=FactorConfig(
+            enabled=bool(factors.get("enabled", False)),
+            event_path=Path(factors.get("event_path", "data/factors/events.csv")),
+            macro_path=Path(factors.get("macro_path", "data/factors/macro.csv")),
+            event_lookback_days=int(factors.get("event_lookback_days", 10)),
+            min_event_confidence=float(factors.get("min_event_confidence", 0.6)),
+            negative_event_score_block=float(factors.get("negative_event_score_block", -35.0)),
+            macro_risk_score_block=float(factors.get("macro_risk_score_block", -40.0)),
+            max_score_adjustment=float(factors.get("max_score_adjustment", 12.0)),
+        ),
         strategy=StrategyConfig(
             name=strategy["name"],
             short_window=int(strategy.get("short_window", 5)),
@@ -153,6 +204,11 @@ def load_config(path: str | Path) -> AppConfig:
             target_window=int(strategy.get("target_window", 60)),
             trend_window=int(strategy.get("trend_window", 5)),
             risk_reward_ratio=float(strategy.get("risk_reward_ratio", 2.0)),
+            entry_candidate_multiplier=int(strategy.get("entry_candidate_multiplier", 4)),
+            entry_max_above_support_pct=float(strategy.get("entry_max_above_support_pct", 0.10)),
+            entry_min_below_target_pct=float(strategy.get("entry_min_below_target_pct", 0.03)),
+            entry_max_recent_runup_pct=float(strategy.get("entry_max_recent_runup_pct", 0.12)),
+            entry_min_trend_slope=float(strategy.get("entry_min_trend_slope", -0.02)),
         ),
         output=OutputConfig(
             backtest_dir=Path(output["backtest_dir"]),

@@ -79,8 +79,16 @@ def load_market_data(
     symbols: Iterable[str],
     start: str | None = None,
     end: str | None = None,
+    strict: bool = True,
 ) -> Dict[str, pd.DataFrame]:
-    return {symbol: load_symbol_frame(data_dir, symbol, start, end) for symbol in symbols}
+    market_data: Dict[str, pd.DataFrame] = {}
+    for symbol in symbols:
+        try:
+            market_data[symbol] = load_symbol_frame(data_dir, symbol, start, end)
+        except FileNotFoundError:
+            if strict:
+                raise
+    return market_data
 
 
 def iter_bars(market_data: Dict[str, pd.DataFrame]) -> Iterable[List[Bar]]:
@@ -145,7 +153,7 @@ def fetch_small_cap_universe(
 ) -> Path:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     try:
-        rows = _fetch_eastmoney_stock_list(max(limit * 8, 100))
+        rows = _fetch_eastmoney_stock_list(max(limit * 25, 500))
     except Exception:
         rows = _bootstrap_small_cap_rows()
     selected = []
@@ -179,23 +187,31 @@ def fetch_small_cap_universe(
     return output_file
 
 
-def _fetch_eastmoney_stock_list(page_size: int) -> List[dict]:
+def _fetch_eastmoney_stock_list(min_rows: int) -> List[dict]:
     url = "https://push2.eastmoney.com/api/qt/clist/get"
-    params = {
-        "pn": "1",
-        "pz": str(page_size),
-        "po": "1",
-        "np": "1",
-        "fltt": "2",
-        "invt": "2",
-        "fid": "f20",
-        "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
-        "fields": "f12,f14,f2,f3,f5,f6,f8,f9,f10,f20,f21",
-    }
-    payload = _curl_json(url, params)
-    if payload.get("rc") != 0:
-        raise RuntimeError(f"Eastmoney stock list failed: {payload.get('rc')}")
-    return list(payload.get("data", {}).get("diff", []))
+    page_size = 100
+    pages = max((min_rows + page_size - 1) // page_size, 1)
+    rows: List[dict] = []
+    for page in range(1, pages + 1):
+        params = {
+            "pn": str(page),
+            "pz": str(page_size),
+            "po": "1",
+            "np": "1",
+            "fltt": "2",
+            "invt": "2",
+            "fid": "f20",
+            "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+            "fields": "f12,f14,f2,f3,f5,f6,f8,f9,f10,f20,f21",
+        }
+        payload = _curl_json(url, params)
+        if payload.get("rc") != 0:
+            raise RuntimeError(f"Eastmoney stock list failed: {payload.get('rc')}")
+        page_rows = list(payload.get("data", {}).get("diff", []) or [])
+        if not page_rows:
+            break
+        rows.extend(page_rows)
+    return rows
 
 
 def _bootstrap_small_cap_rows() -> List[dict]:
@@ -203,7 +219,6 @@ def _bootstrap_small_cap_rows() -> List[dict]:
     candidates = [
         ("002871", "伟隆股份"),
         ("002875", "安奈儿"),
-        ("002883", "中设股份"),
         ("002896", "中大力德"),
         ("002903", "宇环数控"),
         ("002909", "集泰股份"),

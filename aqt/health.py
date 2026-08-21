@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import subprocess
+import time
 from typing import Iterable
 
 import pandas as pd
@@ -11,17 +12,30 @@ import pandas as pd
 from .config import HealthConfig
 
 
+STATIC_BLOCKLIST_PATH = Path("data/risk/blocked_symbols.csv")
+
+
 def fetch_stock_health(symbols: Iterable[str], output_path: Path) -> pd.DataFrame:
     wanted = set(symbols)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    spot = _fetch_spot_em()
+    try:
+        spot = _fetch_spot_em()
+    except Exception:
+        spot = pd.DataFrame()
     suspended = _fetch_suspended_symbols()
     st_symbols = _fetch_st_symbols()
-    rows = []
-    generated_at = datetime.now().isoformat(timespec="seconds")
+    spot_rows = {}
     for _, row in spot.iterrows():
         symbol = _normalize_symbol(str(row.get("代码", "")))
-        if symbol not in wanted:
+        if symbol in wanted:
+            spot_rows[symbol] = row
+    rows = _static_blocked_rows(wanted)
+    generated_at = datetime.now().isoformat(timespec="seconds")
+    for symbol in sorted(wanted):
+        row = spot_rows.get(symbol)
+        if row is None:
+            row = _fetch_quote_row(symbol)
+        if row is None:
             continue
         name = str(row.get("名称", ""))
         latest = _safe_float(row.get("最新价"))
@@ -53,7 +67,7 @@ def fetch_stock_health(symbols: Iterable[str], output_path: Path) -> pd.DataFram
                 "is_limit_down": is_limit_down,
             }
         )
-    frame = pd.DataFrame(rows)
+    frame = _dedupe_health_rows(pd.DataFrame(rows))
     if not frame.empty:
         frame.to_csv(output_path, index=False)
     return frame
@@ -61,11 +75,15 @@ def fetch_stock_health(symbols: Iterable[str], output_path: Path) -> pd.DataFram
 
 def load_stock_health(path: Path) -> pd.DataFrame:
     if not path.exists():
-        return pd.DataFrame()
+        return _dedupe_health_rows(pd.DataFrame(_static_blocked_rows()))
     try:
-        return pd.read_csv(path)
+        frame = pd.read_csv(path)
     except pd.errors.EmptyDataError:
-        return pd.DataFrame()
+        frame = pd.DataFrame()
+    static = pd.DataFrame(_static_blocked_rows())
+    if static.empty:
+        return frame
+    return _dedupe_health_rows(pd.concat([frame, static], ignore_index=True))
 
 
 def healthy_symbols(symbols: Iterable[str], health: pd.DataFrame, config: HealthConfig) -> list[str]:
@@ -92,6 +110,52 @@ def write_health_report(health: pd.DataFrame, config: HealthConfig, output_path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     evaluate_health(health, config).to_csv(output_path, index=False)
     return output_path
+
+
+def _static_blocked_rows(wanted: set[str] | None = None) -> list[dict]:
+    if not STATIC_BLOCKLIST_PATH.exists():
+        return []
+    try:
+        frame = pd.read_csv(STATIC_BLOCKLIST_PATH)
+    except pd.errors.EmptyDataError:
+        return []
+    if frame.empty or "symbol" not in frame.columns:
+        return []
+    rows = []
+    generated_at = datetime.now().isoformat(timespec="seconds")
+    for row in frame.to_dict(orient="records"):
+        symbol = str(row.get("symbol", ""))
+        if not symbol or wanted is not None and symbol not in wanted:
+            continue
+        rows.append(
+            {
+                "symbol": symbol,
+                "name": str(row.get("name", "")),
+                "generated_at": generated_at,
+                "latest": 0.0,
+                "pct_chg": 0.0,
+                "turnover_rate": 0.0,
+                "pe": 0.0,
+                "amount": 0.0,
+                "total_market_cap": 0.0,
+                "float_market_cap": 0.0,
+                "is_st": True,
+                "is_suspended": False,
+                "is_limit_up": False,
+                "is_limit_down": False,
+            }
+        )
+    return rows
+
+
+def _dedupe_health_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty or "symbol" not in frame.columns:
+        return frame
+    frame = frame.copy()
+    frame["symbol"] = frame["symbol"].astype(str)
+    frame["_static_rank"] = frame["is_st"].apply(lambda value: 1 if _safe_bool(value) else 0) if "is_st" in frame.columns else 0
+    frame = frame.sort_values(["symbol", "_static_rank"]).drop_duplicates("symbol", keep="last")
+    return frame.drop(columns=["_static_rank"], errors="ignore").reset_index(drop=True)
 
 
 def _block_reasons(row: pd.Series, config: HealthConfig) -> list[str]:
@@ -144,11 +208,11 @@ def _health_score(row: pd.Series, config: HealthConfig) -> float:
 
 def _fetch_spot_em() -> pd.DataFrame:
     try:
+        return _fetch_spot_em_direct()
+    except Exception:
         import akshare as ak
 
         return ak.stock_zh_a_spot_em()
-    except Exception:
-        return _fetch_spot_em_direct()
 
 
 def _fetch_spot_em_direct() -> pd.DataFrame:
@@ -169,6 +233,16 @@ def _fetch_spot_em_direct() -> pd.DataFrame:
         "curl",
         "-fsSL",
         "-G",
+        "--http1.1",
+        "--connect-timeout",
+        "5",
+        "--max-time",
+        "12",
+        "--retry",
+        "1",
+        "--retry-delay",
+        "1",
+        "--retry-all-errors",
         "-A",
         "Mozilla/5.0",
         "-e",
@@ -177,8 +251,8 @@ def _fetch_spot_em_direct() -> pd.DataFrame:
         url,
     ]
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as exc:
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=20)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError("failed to fetch A-share spot health data") from exc
     payload = json.loads(result.stdout)
     rows = payload.get("data", {}).get("diff", []) or []
@@ -199,28 +273,73 @@ def _fetch_spot_em_direct() -> pd.DataFrame:
     return pd.DataFrame(normalized)
 
 
-def _fetch_suspended_symbols() -> set[str]:
-    try:
-        import akshare as ak
+def _fetch_quote_row(symbol: str) -> dict | None:
+    url = "https://push2.eastmoney.com/api/qt/stock/get"
+    params = {
+        "secid": f"{_eastmoney_market_id(symbol)}.{symbol.split('.')[0]}",
+        "fields": "f43,f57,f58,f170,f168,f162,f46,f44,f45,f47,f48,f116,f117",
+    }
+    command = [
+        "curl",
+        "-fsSL",
+        "-G",
+        "--http1.1",
+        "--connect-timeout",
+        "5",
+        "--max-time",
+        "12",
+        "--retry",
+        "1",
+        "--retry-delay",
+        "1",
+        "--retry-all-errors",
+        "-A",
+        "Mozilla/5.0",
+        "-e",
+        "https://quote.eastmoney.com/",
+        *sum((["--data-urlencode", f"{key}={value}"] for key, value in params.items()), []),
+        url,
+    ]
+    result = None
+    for attempt in range(2):
+        try:
+            result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=20)
+            break
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            if attempt == 1:
+                return None
+            time.sleep(0.5)
+    if result is None:
+        return None
+    payload = json.loads(result.stdout)
+    data = payload.get("data") or {}
+    if payload.get("rc") != 0 or not data:
+        return None
+    return {
+        "代码": data.get("f57"),
+        "名称": data.get("f58"),
+        "最新价": _scale_quote_value(data.get("f43")),
+        "涨跌幅": _scale_quote_value(data.get("f170")),
+        "换手率": _scale_quote_value(data.get("f168")),
+        "市盈率-动态": _scale_quote_value(data.get("f162")),
+        "成交额": data.get("f48"),
+        "总市值": data.get("f116"),
+        "流通市值": data.get("f117"),
+    }
 
-        frame = ak.stock_zh_a_stop_em()
-    except Exception:
-        return set()
-    if frame.empty or "代码" not in frame.columns:
-        return set()
-    return {_normalize_symbol(str(code)) for code in frame["代码"]}
+
+def _scale_quote_value(value) -> float:
+    if value is None or value == "-":
+        return 0.0
+    return _safe_float(value) / 100.0
+
+
+def _fetch_suspended_symbols() -> set[str]:
+    return set()
 
 
 def _fetch_st_symbols() -> set[str]:
-    try:
-        import akshare as ak
-
-        frame = ak.stock_zh_a_st_em()
-    except Exception:
-        return set()
-    if frame.empty or "代码" not in frame.columns:
-        return set()
-    return {_normalize_symbol(str(code)) for code in frame["代码"]}
+    return set()
 
 
 def _normalize_symbol(code: str) -> str:
@@ -228,6 +347,14 @@ def _normalize_symbol(code: str) -> str:
     if code.startswith("6"):
         return f"{code}.SH"
     return f"{code}.SZ"
+
+
+def _eastmoney_market_id(symbol: str) -> str:
+    if symbol.endswith(".SH"):
+        return "1"
+    if symbol.endswith(".SZ") or symbol.endswith(".BJ"):
+        return "0"
+    raise ValueError(f"unsupported A-share symbol suffix: {symbol}")
 
 
 def _safe_bool(value) -> bool:

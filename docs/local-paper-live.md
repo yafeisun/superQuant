@@ -9,6 +9,7 @@
 ```bash
 source .venv/bin/activate
 python -m automation.run_local_paper_live --config configs/smallcap_live.yaml --date 20260818 --market-end 2026-08-18 --no-fetch
+python -m automation.run_local_paper_live --config configs/smallcap_live.yaml --date 20260818 --market-end 2026-08-18 --no-fetch --no-refresh-factors
 ```
 
 每天真实跟踪时去掉 `--no-fetch`，脚本会先拉取最新日线：
@@ -38,14 +39,17 @@ fills.csv                      模拟成交流水
 rejections.csv                 风控拒单流水
 processed_dates.csv            已执行日期，防止同一天重复成交
 decisions/YYYYMMDD/summary.txt 当日运行摘要
+decisions/YYYYMMDD/selection_candidates.csv 全股票池候选评分、买入/等待/阻断原因
 decisions/YYYYMMDD/orders.csv  当日买卖计划、成交状态、原因
+decisions/YYYYMMDD/sell_points.csv 持仓卖点评估和卖出原因
 decisions/YYYYMMDD/position_advice.csv 持仓操作总结和后续建议
 decisions/YYYYMMDD/position_advice.md  适合人工复盘阅读的持仓建议
+decisions/YYYYMMDD/external_factors.csv 新闻/事件/宏观因子评分和原因
 ```
 
 同一天重复运行默认不会再次执行买卖，防止重复成交。确实需要重放测试时加 `--rerun`。
 
-每天虚拟实盘结束后会固定输出持仓总结：每只持仓包含成本、现价、浮盈亏、动态支撑位、看涨目标位、短期趋势、健康状态、今日操作和后续建议。建议只按系统规则生成，例如继续持有、关注支撑、到达目标后趋势衰减则落袋、健康状态变差则不加仓只监控退出。
+每天虚拟实盘结束后会固定输出候选和持仓总结。候选总结覆盖全股票池，标记 `BUY_READY`、`BUY_WAIT` 或 `BLOCK`，并写清楚健康、主力资金、动量、波动、回撤、买点位置和目标空间。持仓总结包含成本、现价、浮盈亏、止损支撑位、止盈目标位、短期趋势、健康状态、卖出判断和后续建议。
 
 ## 盘中盯盘口
 
@@ -58,10 +62,12 @@ python -m automation.run_local_intraday_paper --config configs/smallcap_live.yam
 
 它会在 A 股交易时间内拉实时行情，监控观察股和持仓股：
 
-- 空仓时，在股票健康检查合格的候选池里最多选择 5 只，用实时价模拟首次建仓。
+- 空仓时，只从全量候选评分里的 `BUY_READY` 选择最多 5 只，用实时价模拟首次建仓；如果买点或主力资金不确认，就继续等待。
 - 持仓后，每次运行按实时价更新市值。
-- 跌破动态支撑位且趋势走弱时模拟卖出，原因写 `intraday_support_break`。
-- 涨到看涨目标位且趋势衰减时模拟卖出，原因写 `intraday_target_fade`。
+- 跌破动态支撑位且趋势走弱时模拟卖出。
+- 涨到看涨目标位且趋势衰减时模拟卖出。
+- 触发 ST/退市风险硬闸时模拟卖出或等待 T+1 可卖。
+- 新闻事件或宏观风险因子转弱时也会降低评分，严重负面时会直接触发卖出或拦截买入。
 - 只有发生成交、拒单或权益变化超过 50 RMB 时才追加 `intraday_events.csv`。
 
 常驻运行：
@@ -83,13 +89,26 @@ bash scripts/install_local_paper_cron.sh
 
 买入前会先拉取并缓存 `data/health/latest.csv`，用于过滤所有会影响交易的关键状态。当前检查项包括：
 
-- 停牌：来自 AKShare/东方财富停牌接口，停牌股票不允许买入。
-- ST、退市风险：ST、*ST、名称含退的股票不允许买入。
+- 停牌：实时价或成交额异常时不允许买入。
+- ST、退市风险：ST、*ST、名称含退、本地硬风险名单里的股票不允许买入。
 - 涨跌停：涨停默认不追买，跌停可继续观察但真实接券商时要按盘口确认能否卖出。
 - 流动性：换手率、成交额低于阈值的不买。
 - 估值和规模：PE 异常、流通市值超出小盘策略范围的不买。
 
-每天 `decisions/YYYYMMDD/health.csv` 会保存健康评分、是否可交易和拦截原因，用于复盘为什么某只股票没有入选。
+每天 `decisions/YYYYMMDD/health.csv` 会保存健康评分、是否可交易和拦截原因，用于复盘为什么某只股票没有入选。已知风险名单在 `data/risk/blocked_symbols.csv`。
+
+## 主力资金和买点
+
+准实盘配置会拉取并缓存 `data/flow/latest.csv`。当前要求近 5 个资金流交易日里主力净流入至少 3 天为正，净流入合计和平均净占比满足配置阈值。主力资金只是确认项，不是单独买入理由。
+
+买点评估会检查：
+
+- 当前价格距离支撑位不能太远。
+- 当前价格不能贴近目标位追高。
+- 最近短线涨幅不能过热。
+- 短期趋势不能明显走弱。
+
+因此高动量股票也可能只给 `BUY_WAIT`，系统会等价格和资金流更合适再买。
 
 健康数据是买入前置条件：如果停牌、ST、换手率、PE、市值等关键数据源不可用，系统不会新开仓，只继续监控已有持仓并允许按技术位卖出。
 
@@ -97,7 +116,7 @@ bash scripts/install_local_paper_cron.sh
 
 脚本会自动识别 A 股非交易日，周末或节假日直接跳过，不写账本。
 
-当前虚拟实盘使用小盘动量策略：动态排名选股，定期调仓；退出使用动态支撑位和看涨目标位，不使用固定百分比止盈止损。盘中程序会用实时价判断是否跌破支撑、是否到达目标后趋势衰减。
+当前虚拟实盘使用小盘多因子候选评估加动量轮动执行框架：全量评分、优中选优、只买 `BUY_READY`；退出使用动态支撑位和看涨目标位，不使用固定百分比止盈止损。盘中程序会用实时价判断是否跌破支撑、是否到达目标后趋势衰减，以及是否出现健康硬风险、资金流恶化、新闻事件风险或宏观 risk-off。
 
 实盘/模拟跟踪配置最多持有 5 只股票，避免分散过度、管理困难。
 

@@ -32,6 +32,25 @@ health:
   exclude_limit_up: true
   exclude_limit_down: false
 
+flow:
+  enabled: false
+  path: data/flow/latest.csv
+  lookback_days: 5
+  min_positive_days: 3
+  min_main_net_inflow_ratio: 0.5
+  min_main_net_inflow_amount: 0
+  max_age_days: 7
+
+factors:
+  enabled: true
+  event_path: data/factors/events.csv
+  macro_path: data/factors/macro.csv
+  event_lookback_days: 10
+  min_event_confidence: 0.6
+  negative_event_score_block: -35
+  macro_risk_score_block: -40
+  max_score_adjustment: 12
+
 strategy:
   name: small_cap_momentum
   momentum_window: 40
@@ -44,6 +63,11 @@ strategy:
   target_window: 60
   trend_window: 5
   risk_reward_ratio: 2.0
+  entry_candidate_multiplier: 4
+  entry_max_above_support_pct: 0.08
+  entry_min_below_target_pct: 0.05
+  entry_max_recent_runup_pct: 0.10
+  entry_min_trend_slope: -0.01
 
 output:
   backtest_dir: runs/smallcap_oos_backtest

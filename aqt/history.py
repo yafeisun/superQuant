@@ -66,6 +66,7 @@ def build_account_activity_markdown(state_dir: Path, max_rows: int = 120) -> str
     positions = _latest_position_snapshot(_read_csv(state_dir / "positions.csv"))
     fills = _normalize_fills(_read_csv(state_dir / "fills.csv"))
     equity = _latest_equity_snapshot(_read_csv(state_dir / "equity.csv"))
+    advice = _latest_decision_snapshot(state_dir, "position_advice.csv")
     latest_date = _latest_activity_date(positions, fills, equity)
 
     lines = [
@@ -100,7 +101,7 @@ def build_account_activity_markdown(state_dir: Path, max_rows: int = 120) -> str
             ]
         )
 
-    symbol_rows = _account_symbol_rows(positions, fills)
+    symbol_rows = _account_symbol_rows(positions, fills, advice)
     lines.extend(["#### 每个股票的实际操作和实际持仓", ""])
     if symbol_rows:
         lines.extend(
@@ -119,6 +120,10 @@ def build_account_activity_markdown(state_dir: Path, max_rows: int = 120) -> str
                         "市值",
                         "浮盈亏",
                         "收益率",
+                        "卖出判断",
+                        "卖点理由",
+                        "止损位",
+                        "止盈位",
                     ],
                     [
                         [
@@ -134,6 +139,10 @@ def build_account_activity_markdown(state_dir: Path, max_rows: int = 120) -> str
                             row["market_value"],
                             row["unrealized_pnl"],
                             row["return_pct"],
+                            row["sell_decision"],
+                            row["sell_reason"],
+                            row["sell_stop_level"],
+                            row["sell_take_profit_level"],
                         ]
                         for row in symbol_rows
                     ],
@@ -234,6 +243,18 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _latest_decision_snapshot(state_dir: Path, filename: str) -> pd.DataFrame:
+    decisions_dir = state_dir / "decisions"
+    if not decisions_dir.exists():
+        return pd.DataFrame()
+    candidates = sorted(decisions_dir.glob(f"*/{filename}"), key=lambda path: path.parent.name, reverse=True)
+    for path in candidates:
+        frame = _read_csv(path)
+        if not frame.empty:
+            return frame
+    return pd.DataFrame()
+
+
 def _latest_position_snapshot(positions: pd.DataFrame) -> pd.DataFrame:
     if positions.empty or "symbol" not in positions.columns:
         return pd.DataFrame()
@@ -280,7 +301,7 @@ def _latest_activity_date(positions: pd.DataFrame, fills: pd.DataFrame, equity: 
     return pd.to_datetime(max(dates)).strftime("%Y-%m-%d")
 
 
-def _account_symbol_rows(positions: pd.DataFrame, fills: pd.DataFrame) -> list[dict]:
+def _account_symbol_rows(positions: pd.DataFrame, fills: pd.DataFrame, advice: pd.DataFrame | None = None) -> list[dict]:
     symbols = set()
     if not positions.empty and "symbol" in positions.columns:
         symbols.update(positions["symbol"].astype(str).tolist())
@@ -307,6 +328,11 @@ def _account_symbol_rows(positions: pd.DataFrame, fills: pd.DataFrame) -> list[d
             last_action_date = _fmt_md_date(position_row.get("date"))
             buy_qty = 0.0
             sell_qty = 0.0
+        advice_row = {}
+        if advice is not None and not advice.empty and "symbol" in advice.columns:
+            advice_matches = advice[advice["symbol"].astype(str) == symbol]
+            if not advice_matches.empty:
+                advice_row = advice_matches.iloc[-1].to_dict()
 
         rows.append(
             {
@@ -322,6 +348,10 @@ def _account_symbol_rows(positions: pd.DataFrame, fills: pd.DataFrame) -> list[d
                 "market_value": _fmt_md_money(position_row.get("market_value")),
                 "unrealized_pnl": _fmt_md_money(position_row.get("unrealized_pnl")),
                 "return_pct": _fmt_md_pct(position_row.get("return_pct")),
+                "sell_decision": _translate_sell_decision(advice_row.get("sell_decision")),
+                "sell_reason": _translate_sell_reason(advice_row.get("sell_reason")),
+                "sell_stop_level": _fmt_md_money_4(advice_row.get("sell_stop_level")),
+                "sell_take_profit_level": _fmt_md_money_4(advice_row.get("sell_take_profit_level")),
             }
         )
     return rows
@@ -421,6 +451,43 @@ def _translate_side(value) -> str:
     if side == "SELL":
         return "卖出"
     return side
+
+
+def _translate_sell_decision(value) -> str:
+    if _is_blank(value):
+        return ""
+    decision = str(value).upper()
+    if decision == "SELL_NOW":
+        return "卖出"
+    if decision == "SELL_WAIT_T1":
+        return "T+1后卖"
+    if decision == "SELL_WATCH":
+        return "观察卖点"
+    if decision == "HOLD":
+        return "持有"
+    if decision == "HOLD_WATCH":
+        return "持有观察"
+    return decision
+
+
+def _translate_sell_reason(value) -> str:
+    if _is_blank(value):
+        return ""
+    mapping = {
+        "sell_st_or_delisting_risk": "ST/退市风险，必须退出",
+        "sell_external_event_risk": "重大负面事件风险，必须退出",
+        "sell_macro_risk_off": "宏观风险转弱，必须退出",
+        "sell_support_break_trend_down": "跌破支撑且趋势走弱",
+        "sell_target_reached_trend_fade": "到达目标且趋势衰减",
+        "sell_watch_main_flow_out_trend_down": "主力流出且趋势走弱，观察卖点",
+        "sell_watch_drawdown_from_high": "阶段高点回撤较大，观察卖点",
+        "sell_watch_loss_trend_down": "亏损且趋势走弱，观察卖点",
+        "hold_price_above_support_target_not_faded": "仍在支撑上方，未到卖点",
+        "sell_no_market_data": "缺少行情，不能判断",
+        "sell_history_too_short": "历史数据不足，继续观察",
+    }
+    reasons = [mapping.get(part, part) for part in str(value).split(";") if part]
+    return "; ".join(reasons)
 
 
 def _render_markdown_table(headers: list[str], rows: list[list[object]]) -> str:

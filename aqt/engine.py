@@ -14,16 +14,26 @@ from .strategy import build_strategy
 
 
 def run_backtest(config: AppConfig) -> Dict[str, Path]:
-    return _run_event_loop(config, config.output.backtest_dir, max_cycles=None)
+    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end)
+    return run_backtest_on_market_data(config, config.output.backtest_dir, market_data)
 
 
 def run_paper(config: AppConfig, cycles: int | None) -> Dict[str, Path]:
-    return _run_event_loop(config, config.output.paper_dir, max_cycles=cycles)
-
-
-def _run_event_loop(config: AppConfig, output_dir: Path, max_cycles: int | None) -> Dict[str, Path]:
-    output_dir.mkdir(parents=True, exist_ok=True)
     market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end)
+    return _run_event_loop(config, config.output.paper_dir, max_cycles=cycles, market_data=market_data)
+
+
+def run_backtest_on_market_data(config: AppConfig, output_dir: Path, market_data: Dict[str, pd.DataFrame]) -> Dict[str, Path]:
+    return _run_event_loop(config, output_dir, max_cycles=None, market_data=market_data)
+
+
+def _run_event_loop(
+    config: AppConfig,
+    output_dir: Path,
+    max_cycles: int | None,
+    market_data: Dict[str, pd.DataFrame],
+) -> Dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
     strategy = build_strategy(config.strategy)
     broker = PaperBroker(config.account, config.risk)
 

@@ -66,12 +66,16 @@ docs/roadmap.md    分阶段搭建指南
 
 ## 小盘策略方案
 
-当前已加入小盘动量轮动策略，模拟跟踪最多 5 只，买入前会过滤停牌、ST/退市风险、涨停、流动性不足、PE 异常和市值范围异常。说明见 [docs/smallcap-strategy.md](/home/chery/Documents/Quant/docs/smallcap-strategy.md)。常用命令：
+当前已加入小盘多因子候选评估和动量轮动执行框架，模拟跟踪最多 5 只。买入前会全量评估股票池，过滤停牌、ST/退市风险、涨停、流动性不足、PE 异常和市值范围异常，并结合主力资金持续流入、新闻/事件因子、宏观风险、波动、回撤、买点位置和目标空间决定 `BUY_READY`/`BUY_WAIT`/`BLOCK`。回测和压力测试只负责筛掉明显不行的策略，不证明策略有效。说明见 [docs/smallcap-strategy.md](/home/chery/Documents/Quant/docs/smallcap-strategy.md) 和 [docs/strategy-optimization.md](/home/chery/Documents/Quant/docs/strategy-optimization.md)。常用命令：
 
 ```bash
 source .venv/bin/activate
 python -m aqt.cli fetch-akshare --config configs/smallcap_best.yaml --adjust qfq
+python -m aqt.cli fetch-money-flow --config configs/smallcap_live.yaml
+python -m aqt.cli ingest-event-factors --input data/factors/events.jsonl --output data/factors/events.csv
+python -m aqt.cli selection-candidates --config configs/smallcap_live.yaml --output reports/selection_candidates.csv
 python -m aqt.cli paper-run --config configs/smallcap_best.yaml
+python -m aqt.cli stress-test --config configs/smallcap.yaml --output runs/stress_test
 python -m aqt.cli report --run-dir runs/smallcap_best_paper
 python -m aqt.cli history-report --run-dir runs/smallcap_best_paper --output /tmp/smallcap_best_paper_history.html
 ```
@@ -94,9 +98,10 @@ python -m aqt.cli history-report --run-dir runs/smallcap_best_paper --output /tm
 ```bash
 source .venv/bin/activate
 python -m automation.run_local_paper_live --config configs/smallcap_live.yaml
+python -m automation.run_local_paper_live --config configs/smallcap_live.yaml --no-fetch --no-refresh-factors
 ```
 
-账本默认写入 `local_runs/paper_live/`，包含账户、持仓、成交、权益曲线和每日决策。该目录默认不提交到 GitHub。
+账本默认写入 `local_runs/paper_live/`，包含账户、持仓、成交、权益曲线和每日决策。每日决策目录会保存 `selection_candidates.csv`、`orders.csv`、`position_advice.csv`、`sell_points.csv`、`health.csv`、`money_flow.csv` 和 `external_factors.csv`，用于复盘每只股票为什么买、为什么等、为什么卖或继续持有。该目录默认不提交到 GitHub。
 
 本地定时任务安装：
 
@@ -127,18 +132,18 @@ python -m aqt.cli account-activity --state-dir local_runs/paper_live --output re
 
 #### 每个股票的实际操作和实际持仓
 
-| 股票 | 最近实际操作 | 操作日期 | 累计买入 | 累计卖出 | 当前持仓 | 可卖 | 成本价 | 现价 | 市值 | 浮盈亏 | 收益率 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 002883.SZ | 买入 | 2026-08-18 | 900 | 0 | 900 | 900 | 9.3928 | 9.3900 | 8,451.00 | -2.54 | -0.03% |
-| 002896.SZ | 买入 | 2026-08-18 | 100 | 0 | 100 | 100 | 84.9155 | 84.8900 | 8,489.00 | -2.55 | -0.03% |
-| 002923.SZ | 买入 | 2026-08-18 | 700 | 0 | 700 | 700 | 11.6635 | 11.6600 | 8,162.00 | -2.45 | -0.03% |
-| 003015.SZ | 买入 | 2026-08-18 | 600 | 0 | 600 | 600 | 12.6038 | 12.6000 | 7,560.00 | -2.27 | -0.03% |
-| 003016.SZ | 买入 | 2026-08-18 | 1,200 | 0 | 1,200 | 1,200 | 7.0221 | 7.0200 | 8,424.00 | -2.53 | -0.03% |
-| 003017.SZ | 买入 | 2026-08-18 | 300 | 0 | 300 | 300 | 23.3170 | 23.3100 | 6,993.00 | -2.10 | -0.03% |
-| 003020.SZ | 买入 | 2026-08-18 | 400 | 0 | 400 | 400 | 19.4158 | 19.4100 | 7,764.00 | -2.33 | -0.03% |
-| 003023.SZ | 买入 | 2026-08-18 | 300 | 0 | 300 | 300 | 27.7583 | 27.7500 | 8,325.00 | -2.50 | -0.03% |
-| 603655.SH | 买入 | 2026-08-18 | 200 | 0 | 200 | 200 | 33.7601 | 33.7500 | 6,750.00 | -2.02 | -0.03% |
-| 603679.SH | 买入 | 2026-08-18 | 300 | 0 | 300 | 300 | 22.7368 | 22.7300 | 6,819.00 | -2.05 | -0.03% |
+| 股票 | 最近实际操作 | 操作日期 | 累计买入 | 累计卖出 | 当前持仓 | 可卖 | 成本价 | 现价 | 市值 | 浮盈亏 | 收益率 | 卖出判断 | 卖点理由 | 止损位 | 止盈位 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 002883.SZ | 买入 | 2026-08-18 | 900 | 0 | 900 | 900 | 9.3928 | 9.3900 | 8,451.00 | -2.54 | -0.03% | 卖出 | ST/退市风险，必须退出 | 8.0100 | 12.1585 |
+| 002896.SZ | 买入 | 2026-08-18 | 100 | 0 | 100 | 100 | 84.9155 | 84.8900 | 8,489.00 | -2.55 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 58.5100 | 137.7264 |
+| 002923.SZ | 买入 | 2026-08-18 | 700 | 0 | 700 | 700 | 11.6635 | 11.6600 | 8,162.00 | -2.45 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 10.0100 | 14.9705 |
+| 003015.SZ | 买入 | 2026-08-18 | 600 | 0 | 600 | 600 | 12.6038 | 12.6000 | 7,560.00 | -2.27 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 10.0700 | 17.6713 |
+| 003016.SZ | 买入 | 2026-08-18 | 1,200 | 0 | 1,200 | 1,200 | 7.0221 | 7.0200 | 8,424.00 | -2.53 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 6.1000 | 8.8663 |
+| 003017.SZ | 买入 | 2026-08-18 | 300 | 0 | 300 | 300 | 23.3170 | 23.3100 | 6,993.00 | -2.10 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 19.1100 | 31.7310 |
+| 003020.SZ | 买入 | 2026-08-18 | 400 | 0 | 400 | 400 | 19.4158 | 19.4100 | 7,764.00 | -2.33 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 15.5100 | 27.2275 |
+| 003023.SZ | 买入 | 2026-08-18 | 300 | 0 | 300 | 300 | 27.7583 | 27.7500 | 8,325.00 | -2.50 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 16.7100 | 49.8550 |
+| 603655.SH | 买入 | 2026-08-18 | 200 | 0 | 200 | 200 | 33.7601 | 33.7500 | 6,750.00 | -2.02 | -0.03% | 观察卖点 | 阶段高点回撤较大，观察卖点 | 23.7000 | 53.8804 |
+| 603679.SH | 买入 | 2026-08-18 | 300 | 0 | 300 | 300 | 22.7368 | 22.7300 | 6,819.00 | -2.05 | -0.03% | 持有 | 仍在支撑上方，未到卖点 | 15.3800 | 37.4505 |
 
 #### 每日按股票实际成交
 

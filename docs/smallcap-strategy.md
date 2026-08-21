@@ -8,12 +8,15 @@
 
 1. 使用小盘候选股票池。
 2. 每个交易日更新所有标的收盘价。
-3. 每隔固定交易日调仓一次。
-4. 计算过去 `momentum_window` 个交易日涨幅。
+3. 全量评估股票池，而不是只在动量前几名里拍脑袋选股。
+4. 对每只股票计算健康、主力资金、事件因子、宏观因子、动量、波动、回撤、买点位置、目标空间和流动性/估值得分。
 5. 先做股票健康检查，过滤停牌、ST/退市风险、涨停不可买、流动性不足、PE 异常、流通市值不符合小盘范围的股票。
-6. 在健康合格股票里，选择涨幅最高且大于 `min_momentum` 的前 `top_n` 只股票。
-7. 按等权目标仓位买入/卖出，目标总仓位 `target_gross_exposure`。
-8. 执行层模拟 A 股 100 股整手、T+1、佣金、最低佣金、卖出印花税、滑点、单票/单笔限制。
+6. 再做主力资金确认，要求近期主力净流入持续性、净流入金额和净占比满足阈值。
+7. 再看新闻/事件和宏观因子，来源必须结构化、可追溯、可校验，负面风险只做拦截或减分，不让模型直接下单。
+8. 买入前必须通过买点评估：不能离支撑位太远，不能贴近目标位追高，不能刚短线急拉，趋势不能明显走弱。
+9. 只有 `BUY_READY` 可以生成买入订单；`BUY_WAIT` 和 `BLOCK` 都会写明原因。
+10. 已有持仓每天做卖点评估，输出止损支撑、止盈目标、距止损/目标空间、趋势和卖出原因。
+11. 执行层模拟 A 股 100 股整手、T+1、佣金、最低佣金、卖出印花税、滑点、单票/单笔限制。
 
 当前历史最优配置在 [configs/smallcap_best.yaml](/home/chery/Documents/Quant/configs/smallcap_best.yaml)：
 
@@ -40,6 +43,63 @@ target_gross_exposure: 0.85
 - 小盘范围：流通市值不在配置区间内的不买。
 
 健康数据采用买入侧失败关闭：如果公开数据源不可用或没有缓存，系统不会新开仓，只继续处理已有持仓的卖出和风险退出。
+
+## 主力资金确认
+
+准实盘配置会拉取个股资金流，默认写入：
+
+```text
+data/flow/latest.csv
+```
+
+当前买入确认规则在 `configs/smallcap_live.yaml`：
+
+```yaml
+flow:
+  enabled: true
+  lookback_days: 5
+  min_positive_days: 3
+  min_main_net_inflow_ratio: 0.5
+  min_main_net_inflow_amount: 0
+```
+
+含义：最近 5 个资金流交易日里，主力净流入至少 3 天为正，主力净流入合计不为负，平均主力净流入占比至少为正。资金流不是单独买入理由，只作为“有人持续进场”的确认项；如果价格位置不好，仍然只给 `BUY_WAIT`。
+
+## 事件和宏观因子
+
+事件因子和宏观因子默认通过 `factors` 段接入：
+
+```yaml
+factors:
+  enabled: true
+  event_path: data/factors/events.csv
+  macro_path: data/factors/macro.csv
+  event_lookback_days: 10
+  min_event_confidence: 0.6
+  negative_event_score_block: -35
+  macro_risk_score_block: -40
+```
+
+`ingest-event-factors` 会把 DeepSeek 或其他 NLP 模型抽取的事件 JSONL/CSV 规整成统一结构。要求字段至少包含 `symbol`、`event_date`、`event_type`、`sentiment`、`impact_score`、`confidence`、`summary` 和 `source_url`。模型输出只能作为结构化因子进入评分和拦截，不能直接下单。
+
+## 全量候选评估
+
+每天本地虚拟实盘会输出：
+
+```text
+local_runs/paper_live/decisions/YYYYMMDD/selection_candidates.csv
+```
+
+关键字段：
+
+- `selection_rank`：综合评分排名。
+- `buy_decision`：`BUY_READY`、`BUY_WAIT` 或 `BLOCK`。
+- `buy_reason`：不能买或需要等的明确原因。
+- `positive_reason`：支持继续观察或买入的正面依据。
+- `selection_score`：健康、资金流、动量、波动、回撤、流动性、估值和买点的综合分。
+- `entry_support_level`、`entry_target_level`：买点相关支撑和目标参考。
+
+这个文件用于回答“为什么选它”和“为什么没买它”。没有出现在订单里的股票也能被复盘。
 
 ## 运行流程
 
@@ -78,7 +138,7 @@ risk_reward_ratio: 2.0
 - `risk_reward_ratio`：用成本价到支撑位的风险距离，推导至少 2 倍风险回报的目标价。
 - `trend_window`：用最近 5 个交易日趋势确认是否走弱。
 
-卖出不再是“跌到某个固定百分比就砍”。只有跌破支撑位且短期趋势走弱，才生成 `support_break_trend_down`；涨到看涨目标位后，如果短期趋势衰减，才生成 `target_reached_trend_fade`，体现“趋势没坏继续拿，趋势衰减落袋为安”。
+卖出不再是“跌到某个固定百分比就砍”。只有跌破支撑位且短期趋势走弱，才生成卖出；涨到看涨目标位后，如果短期趋势衰减，才生成止盈卖出；ST/退市风险会触发健康退出。每日输出 `sell_points.csv` 和 `position_advice.md`，明确每个持仓的卖点、止盈目标、距止损/目标空间和继续持有理由。
 
 参数搜索：
 
@@ -157,4 +217,5 @@ runs/smallcap_best_paper/trades.csv
 ```bash
 python -m aqt.cli backtest --config configs/smallcap_oos.yaml
 python -m aqt.cli report --run-dir runs/smallcap_oos_backtest
+python -m aqt.cli stress-test --config configs/smallcap.yaml --output runs/stress_test
 ```

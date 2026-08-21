@@ -4,5 +4,7 @@ __pycache__/
 .pytest_cache/
 data/raw/*.csv
 data/health/*.csv
+data/flow/*.csv
+data/factors/*.csv
 runs/
 local_runs/
