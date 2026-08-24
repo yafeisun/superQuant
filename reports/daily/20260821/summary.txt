@@ -1,7 +1,13 @@
 signal_date: 2026-08-21
-status: no_eligible_symbols
+trading_day_index: 640
+equity: 1000000.00
+cash: 1000000.00
+rebalance_day: True
+next_rebalance_in_trading_days: 0
 planned_orders: 0
-reason: health_data_missing_or_all_symbols_filtered
+
+selected_by_momentum:
+  1. 002871.SZ momentum=-24.11% close=16.65
 
 order_plan:
   HOLD
