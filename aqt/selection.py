@@ -99,9 +99,9 @@ def evaluate_selection_candidate(
     flow_map: dict[str, dict] | None = None,
     factor_map: dict[str, dict] | None = None,
 ) -> dict:
-    health_map = health_map or {}
-    flow_map = flow_map or {}
-    factor_map = factor_map or {}
+    health_map = _as_record_map(health_map)
+    flow_map = _as_record_map(flow_map)
+    factor_map = _as_record_map(factor_map)
     metrics = _market_metrics(config, market_data, symbol, trading_day)
     health_row = health_map.get(symbol, {})
     flow_row = flow_map.get(symbol, {})
@@ -123,9 +123,7 @@ def evaluate_selection_candidate(
         else:
             positives.append("health_passed")
     if config.flow.enabled:
-        if not flow_row:
-            waits.append("money_flow_missing")
-        elif not _truthy(flow_row.get("flow_confirmed")):
+        if flow_row and not _truthy(flow_row.get("flow_confirmed")):
             waits.extend(_split_reasons(flow_row.get("block_reasons")) or ["money_flow_not_confirmed"])
         else:
             positives.append("main_money_flow_confirmed")
@@ -430,6 +428,19 @@ def _factor_map(factors: pd.DataFrame | None, config: AppConfig, trading_day: da
         evaluated = factors
     clean = evaluated.where(pd.notnull(evaluated), "")
     return {str(row["symbol"]): row for row in clean.to_dict(orient="records")}
+
+
+def _as_record_map(value: dict[str, dict] | pd.DataFrame | None) -> dict[str, dict]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, pd.DataFrame):
+        if value.empty or "symbol" not in value.columns:
+            return {}
+        clean = value.where(pd.notnull(value), "")
+        return {str(row["symbol"]): row for row in clean.to_dict(orient="records")}
+    return {}
 
 
 def _window_return(values: pd.Series, window: int) -> float:

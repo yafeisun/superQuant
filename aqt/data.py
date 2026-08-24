@@ -102,6 +102,8 @@ def iter_bars(market_data: Dict[str, pd.DataFrame]) -> Iterable[List[Bar]]:
             if rows.empty:
                 continue
             row = rows.iloc[0]
+            previous_rows = frame[frame["date"].dt.date < trading_day]
+            previous_close = float(previous_rows.iloc[-1]["close"]) if not previous_rows.empty else None
             bars.append(
                 Bar(
                     symbol=symbol,
@@ -111,6 +113,7 @@ def iter_bars(market_data: Dict[str, pd.DataFrame]) -> Iterable[List[Bar]]:
                     low=float(row["low"]),
                     close=float(row["close"]),
                     volume=float(row["volume"]),
+                    previous_close=previous_close,
                 )
             )
         if bars:

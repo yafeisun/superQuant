@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 from dataclasses import asdict, replace
 from datetime import date, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from aqt.broker import PaperBroker
+from aqt.alerts import dispatch_status_alerts
 from aqt.calendar import is_a_share_trading_day, parse_calendar_date
 from aqt.config import AppConfig, load_config
 from aqt.data import fetch_akshare_daily, iter_bars, load_market_data
@@ -18,7 +20,9 @@ from aqt.factors import evaluate_external_factors, load_external_factors
 from aqt.flow import evaluate_money_flow, fetch_money_flow, load_money_flow
 from aqt.health import evaluate_health, fetch_stock_health, load_stock_health, write_health_report
 from aqt.live_rules import screen_buy_orders, sell_point_orders
+from aqt.live_dashboard import generate_live_dashboard
 from aqt.models import Account, Bar, Fill, Order, Position, Side
+from aqt.run_status import write_run_status
 from aqt.selection import build_selection_candidates, evaluate_sell_point
 from aqt.strategy import build_strategy
 
@@ -34,12 +38,24 @@ def main() -> None:
     parser.add_argument("--no-refresh-factors", action="store_true", help="use cached health and money-flow factors")
     parser.add_argument("--force", action="store_true", help="run even when the target date is not an A-share trading day")
     parser.add_argument("--rerun", action="store_true", help="allow executing orders again for an already processed date")
+    parser.add_argument("--dashboard-output", default="reports/live_dashboard.html")
+    parser.add_argument("--no-dashboard", action="store_true", help="skip refreshing the local live dashboard")
     args = parser.parse_args()
 
     now = datetime.now(ZoneInfo("Asia/Shanghai"))
     target_date = parse_calendar_date(args.date, now.date())
     if not args.force and not is_a_share_trading_day(target_date):
         print(f"skip: {target_date.isoformat()} is not an A-share trading day")
+        write_run_status(
+            Path(args.state_dir),
+            "paper_live",
+            "skipped_non_trading_day",
+            target_date,
+            "info",
+            "target date is not an A-share trading day",
+        )
+        _refresh_dashboard(Path(args.state_dir), Path(args.dashboard_output), args.no_dashboard, Path(args.config))
+        _dispatch_alerts(Path(args.state_dir))
         return
 
     config = _with_market_end(load_config(args.config), args.market_end or target_date.isoformat())
@@ -57,6 +73,8 @@ def main() -> None:
     factors = load_external_factors(config.factors, config.data.symbols, target_date)
 
     result = run_once(config, state_dir, target_date, allow_rerun=args.rerun, health=health, flow=flow, factors=factors)
+    _refresh_dashboard(state_dir, Path(args.dashboard_output), args.no_dashboard, Path(args.config))
+    _dispatch_alerts(state_dir)
     print(result["summary_path"])
 
 
@@ -74,15 +92,19 @@ def run_once(
     market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end, strict=False)
     all_bars = list(iter_bars(market_data))
     if not all_bars:
-        raise RuntimeError("no market data loaded")
-
-    target_bars = _find_bars(all_bars, target_date)
-    if not target_bars:
         summary_path = _write_no_data_summary(state_dir, target_date)
         return {"summary_path": summary_path, "status": "no_data"}
 
+    target_bars = _find_latest_bars(all_bars, target_date)
+    if not target_bars:
+        summary_path = _write_no_data_summary(state_dir, target_date)
+        return {"summary_path": summary_path, "status": "no_data"}
+    signal_date = target_bars[0].date
+    if factors is None or signal_date != target_date:
+        factors = load_external_factors(config.factors, config.data.symbols, signal_date)
+
     processed_dates = _read_processed_dates(state_dir / "processed_dates.csv")
-    already_processed = target_date.isoformat() in processed_dates
+    already_processed = signal_date.isoformat() in processed_dates
 
     broker = PaperBroker(config.account, config.risk)
     broker.account = account
@@ -90,69 +112,93 @@ def run_once(
     strategy = build_strategy(config.strategy)
     warmup_account = Account(cash=0.0)
     for bars in all_bars:
-        if bars[0].date >= target_date:
+        if bars[0].date >= signal_date:
             break
         strategy.on_bars(bars, warmup_account)
 
     broker.mark_to_market(target_bars)
     bars_by_symbol = {bar.symbol: bar for bar in target_bars}
-    day_dir = state_dir / "decisions" / target_date.strftime("%Y%m%d")
+    day_dir = state_dir / "decisions" / signal_date.strftime("%Y%m%d")
     day_dir.mkdir(parents=True, exist_ok=True)
-    selection_candidates = build_selection_candidates(config, market_data, target_date, health, flow, factors)
+    selection_candidates = build_selection_candidates(config, market_data, signal_date, health, flow, factors)
     if not selection_candidates.empty:
         selection_candidates.to_csv(day_dir / "selection_candidates.csv", index=False)
 
     strategy_orders = strategy.on_bars(target_bars, broker.account)
     sell_orders, sell_point_rows = sell_point_orders(
-        broker.account, bars_by_symbol, market_data, target_date, health, flow, config, factors
+        broker.account, bars_by_symbol, market_data, signal_date, health, flow, config, factors
     )
     sell_orders = _dedupe_orders(sell_orders + [order for order in strategy_orders if order.side == Side.SELL])
     buy_orders: list[Order] = []
     skipped_orders: list[dict] = []
     if _should_consider_buys(strategy_orders, broker.account, config):
         buy_orders, skipped_orders = _selection_entry_orders(
-            config, selection_candidates, bars_by_symbol, broker.account, target_date
+            config, selection_candidates, bars_by_symbol, broker.account, signal_date
         )
         buy_orders, screened_skips = screen_buy_orders(
-            buy_orders, health, flow, config, market_data, target_date, bars_by_symbol, factors
+            buy_orders, health, flow, config, market_data, signal_date, bars_by_symbol, factors
         )
         skipped_orders.extend(screened_skips)
     orders = sell_orders + buy_orders
     if already_processed and not allow_rerun:
         summary_path = day_dir / "summary.txt"
         if not summary_path.exists():
-            _write_summary(summary_path, target_date, "already_processed", broker.account, [], [], [])
+            _write_summary(summary_path, target_date, signal_date, "already_processed", broker.account, [], [], [])
         if factors is not None and not factors.empty:
             factors.to_csv(day_dir / "external_factors.csv", index=False)
-        _write_position_advice(day_dir, target_date, broker.account, market_data, health, flow, factors, config, [], sell_point_rows)
+        _write_position_advice(day_dir, signal_date, broker.account, market_data, health, flow, factors, config, [], sell_point_rows)
+        write_run_status(
+            state_dir,
+            "paper_live",
+            "already_processed",
+            signal_date,
+            "info",
+            "paper-live date was already processed",
+            {"requested_date": target_date, "summary_path": summary_path},
+        )
         return {"summary_path": summary_path, "status": "already_processed"}
 
     fills: list[Fill] = []
     rejections: list[dict] = []
-    status = "executed"
+    status = "executed" if signal_date == target_date else "stale_data_fallback"
 
     fills = broker.execute_orders(orders, bars_by_symbol)
     broker.mark_to_market(target_bars)
     broker.settle_day()
     rejections = list(broker.rejected_orders)
-    _append_processed_date(state_dir / "processed_dates.csv", target_date)
+    _append_processed_date(state_dir / "processed_dates.csv", signal_date)
 
     _save_account(state_dir / "account.json", broker.account)
     _append_rows(state_dir / "fills.csv", [_fill_row(fill) for fill in fills])
     _append_rows(state_dir / "rejections.csv", rejections)
-    _upsert_equity(state_dir / "equity.csv", _equity_row(target_date, broker.account, fills, config.account.initial_cash))
-    _write_positions(state_dir / "positions.csv", target_date, broker.account)
+    _upsert_equity(state_dir / "equity.csv", _equity_row(signal_date, broker.account, fills, config.account.initial_cash))
+    _write_positions(state_dir / "positions.csv", signal_date, broker.account)
 
     order_rows = _order_rows(orders, fills, rejections, bars_by_symbol, skipped_orders)
     pd.DataFrame(order_rows).to_csv(day_dir / "orders.csv", index=False)
     if health is not None and not health.empty:
         write_health_report(health, config.health, day_dir / "health.csv")
     if flow is not None and not flow.empty:
-        evaluate_money_flow(flow, config.flow, target_date).to_csv(day_dir / "money_flow.csv", index=False)
+        evaluate_money_flow(flow, config.flow, signal_date).to_csv(day_dir / "money_flow.csv", index=False)
     if factors is not None and not factors.empty:
         factors.to_csv(day_dir / "external_factors.csv", index=False)
-    _write_position_advice(day_dir, target_date, broker.account, market_data, health, flow, factors, config, fills, sell_point_rows)
-    summary_path = _write_summary(day_dir / "summary.txt", target_date, status, broker.account, orders, fills, rejections)
+    _write_position_advice(day_dir, signal_date, broker.account, market_data, health, flow, factors, config, fills, sell_point_rows)
+    summary_path = _write_summary(day_dir / "summary.txt", target_date, signal_date, status, broker.account, orders, fills, rejections)
+    write_run_status(
+        state_dir,
+        "paper_live",
+        status,
+        signal_date,
+        "warning" if status == "stale_data_fallback" else "info",
+        "paper-live completed with stale data fallback" if status == "stale_data_fallback" else "paper-live completed",
+        {
+            "requested_date": target_date,
+            "summary_path": summary_path,
+            "orders": len(orders),
+            "fills": len(fills),
+            "rejections": len(rejections),
+        },
+    )
     return {"summary_path": summary_path, "status": status}
 
 
@@ -190,9 +236,32 @@ def _refresh_money_flow(config: AppConfig) -> pd.DataFrame:
         return load_money_flow(config.flow.path)
 
 
-def _find_bars(all_bars: list[list[Bar]], target_date: date) -> list[Bar]:
-    for bars in all_bars:
-        if bars[0].date == target_date:
+def _refresh_dashboard(state_dir: Path, output_path: Path, disabled: bool, config_path: Path | None = None) -> None:
+    if disabled:
+        return
+    try:
+        generate_live_dashboard(state_dir, output_path, config_path)
+    except Exception as exc:
+        write_run_status(
+            state_dir,
+            "dashboard",
+            "refresh_failed",
+            severity="warning",
+            message="live dashboard refresh failed",
+            details={"output_path": output_path, "error": str(exc)},
+        )
+
+
+def _dispatch_alerts(state_dir: Path) -> None:
+    try:
+        dispatch_status_alerts(state_dir, webhook_url=os.environ.get("AQT_ALERT_WEBHOOK_URL"))
+    except Exception:
+        return
+
+
+def _find_latest_bars(all_bars: list[list[Bar]], target_date: date) -> list[Bar]:
+    for bars in reversed(all_bars):
+        if bars and bars[0].date <= target_date:
             return bars
     return []
 
@@ -567,6 +636,7 @@ def _upsert_equity(path: Path, row: dict) -> None:
 
 def _write_summary(
     path: Path,
+    requested_day: date,
     trading_day: date,
     status: str,
     account: Account,
@@ -576,6 +646,7 @@ def _write_summary(
 ) -> Path:
     market_value = sum(position.market_value for position in account.positions.values())
     lines = [
+        f"requested_date: {requested_day.isoformat()}",
         f"date: {trading_day.isoformat()}",
         f"status: {status}",
         f"cash: {account.cash:.2f}",
@@ -605,8 +676,17 @@ def _write_no_data_summary(state_dir: Path, target_date: date) -> Path:
     day_dir.mkdir(parents=True, exist_ok=True)
     path = day_dir / "summary.txt"
     path.write_text(
-        f"date: {target_date.isoformat()}\nstatus: no_data\nmessage: no local bar data for target date\n",
+        f"requested_date: {target_date.isoformat()}\ndate: {target_date.isoformat()}\nstatus: no_data\nmessage: no local bar data for target date\n",
         encoding="utf-8",
+    )
+    write_run_status(
+        state_dir,
+        "paper_live",
+        "no_data",
+        target_date,
+        "error",
+        "no local bar data for target date",
+        {"summary_path": path},
     )
     return path
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import time
 from dataclasses import asdict, replace
 from datetime import date, datetime, time as day_time
@@ -12,6 +13,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from aqt.broker import PaperBroker
+from aqt.alerts import dispatch_status_alerts
 from aqt.calendar import is_a_share_trading_day, parse_calendar_date
 from aqt.config import AppConfig, load_config
 from aqt.data import fetch_akshare_daily, load_market_data
@@ -19,8 +21,10 @@ from aqt.factors import load_external_factors
 from aqt.flow import fetch_money_flow, load_money_flow
 from aqt.health import fetch_stock_health, healthy_symbols, load_stock_health
 from aqt.live_rules import screen_buy_orders, sell_point_orders
+from aqt.live_dashboard import generate_live_dashboard
 from aqt.models import Account, Bar, Fill, Order, Position, Side
 from aqt.quotes import Quote, fetch_realtime_quotes
+from aqt.run_status import write_run_status
 from aqt.selection import build_selection_candidates
 
 
@@ -36,6 +40,8 @@ def main() -> None:
     parser.add_argument("--no-fetch", action="store_true", help="skip daily-bar refresh before quote watch")
     parser.add_argument("--no-refresh-factors", action="store_true", help="use cached health and money-flow factors")
     parser.add_argument("--force", action="store_true", help="run outside trading day/hour checks")
+    parser.add_argument("--dashboard-output", default="reports/live_dashboard.html")
+    parser.add_argument("--no-dashboard", action="store_true", help="skip refreshing the local live dashboard")
     args = parser.parse_args()
 
     while True:
@@ -52,9 +58,30 @@ def run_once(args: argparse.Namespace) -> bool:
     target_date = parse_calendar_date(args.date, now.date())
     if not args.force and not is_a_share_trading_day(target_date):
         print(f"skip: {target_date.isoformat()} is not an A-share trading day")
+        write_run_status(
+            Path(args.state_dir),
+            "intraday_paper",
+            "skipped_non_trading_day",
+            target_date,
+            "info",
+            "target date is not an A-share trading day",
+        )
+        _refresh_dashboard(Path(args.state_dir), Path(args.dashboard_output), args.no_dashboard, Path(args.config))
+        _dispatch_alerts(Path(args.state_dir))
         return False
     if not args.force and not _is_trading_time(now.time()):
         print(f"skip: {now.strftime('%H:%M:%S')} is outside A-share trading hours")
+        write_run_status(
+            Path(args.state_dir),
+            "intraday_paper",
+            "skipped_outside_trading_hours",
+            target_date,
+            "info",
+            "current time is outside A-share trading hours",
+            {"time": now.strftime("%H:%M:%S")},
+        )
+        _refresh_dashboard(Path(args.state_dir), Path(args.dashboard_output), args.no_dashboard, Path(args.config))
+        _dispatch_alerts(Path(args.state_dir))
         return False
 
     config = _with_market_end(load_config(args.config), args.market_end or target_date.isoformat())
@@ -78,9 +105,20 @@ def run_once(args: argparse.Namespace) -> bool:
     if not factors.empty:
         factors.to_csv(day_dir / "intraday_external_factors.csv", index=False)
     target_symbols = _watch_symbols(config, market_data, target_date, account, health, selection_candidates)
-    quotes = fetch_realtime_quotes(target_symbols)
+    quotes = fetch_realtime_quotes(target_symbols, state_dir / "quotes.csv")
     if not quotes:
         print("skip: no realtime quotes loaded")
+        write_run_status(
+            state_dir,
+            "intraday_paper",
+            "quote_fetch_failed",
+            target_date,
+            "error",
+            "no realtime quotes loaded for watch symbols",
+            {"watch_symbols": target_symbols, "selection_rows": len(selection_candidates)},
+        )
+        _refresh_dashboard(state_dir, Path(args.dashboard_output), args.no_dashboard, Path(args.config))
+        _dispatch_alerts(state_dir)
         return True
 
     broker = PaperBroker(config.account, config.risk)
@@ -111,6 +149,23 @@ def run_once(args: argparse.Namespace) -> bool:
         print(state_dir / "intraday_events.csv")
     else:
         print("unchanged")
+    write_run_status(
+        state_dir,
+        "intraday_paper",
+        "ok",
+        target_date,
+        "info",
+        "intraday paper loop completed",
+        {
+            "quotes": len(quotes),
+            "fills": len(fills),
+            "rejections": len(broker.rejected_orders),
+            "event_changed": changed,
+            "events_path": state_dir / "intraday_events.csv",
+        },
+    )
+    _refresh_dashboard(state_dir, Path(args.dashboard_output), args.no_dashboard, Path(args.config))
+    _dispatch_alerts(state_dir)
     return True
 
 
@@ -150,6 +205,29 @@ def _refresh_money_flow(config: AppConfig) -> pd.DataFrame:
         return refreshed if not refreshed.empty else load_money_flow(config.flow.path)
     except Exception:
         return load_money_flow(config.flow.path)
+
+
+def _refresh_dashboard(state_dir: Path, output_path: Path, disabled: bool, config_path: Path | None = None) -> None:
+    if disabled:
+        return
+    try:
+        generate_live_dashboard(state_dir, output_path, config_path)
+    except Exception as exc:
+        write_run_status(
+            state_dir,
+            "dashboard",
+            "refresh_failed",
+            severity="warning",
+            message="live dashboard refresh failed",
+            details={"output_path": output_path, "error": str(exc)},
+        )
+
+
+def _dispatch_alerts(state_dir: Path) -> None:
+    try:
+        dispatch_status_alerts(state_dir, webhook_url=os.environ.get("AQT_ALERT_WEBHOOK_URL"))
+    except Exception:
+        return
 
 
 def _watch_symbols(

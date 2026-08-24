@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 import json
 from pathlib import Path
@@ -26,22 +27,58 @@ FLOW_COLUMNS = [
 ]
 
 
-def fetch_money_flow(symbols: Iterable[str], output_path: Path, lookback_days: int) -> pd.DataFrame:
+def fetch_money_flow(symbols: Iterable[str], output_path: Path, lookback_days: int, max_workers: int = 4) -> pd.DataFrame:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    wanted = [str(symbol) for symbol in symbols]
+    previous = load_money_flow(output_path)
+    previous_map = {str(row["symbol"]): row for row in previous.to_dict(orient="records")} if not previous.empty else {}
     rows = []
+    fetched_symbols: list[str] = []
+    cached_symbols: list[str] = []
+    failed_symbols: list[str] = []
     generated_at = datetime.now().isoformat(timespec="seconds")
-    for symbol in symbols:
+    summaries = _fetch_money_flow_summaries(wanted, max(lookback_days, 1), generated_at, max_workers)
+    for symbol, summary in summaries:
+        if summary:
+            rows.append(summary)
+            fetched_symbols.append(symbol)
+        elif symbol in previous_map:
+            rows.append(previous_map[symbol])
+            cached_symbols.append(symbol)
+        else:
+            failed_symbols.append(symbol)
+    result = pd.DataFrame(rows, columns=FLOW_COLUMNS)
+    if not result.empty:
+        result = result.drop_duplicates("symbol", keep="last")
+        result.to_csv(output_path, index=False)
+    _write_money_flow_status(
+        output_path.with_suffix(".status.json"),
+        generated_at,
+        wanted,
+        fetched_symbols,
+        cached_symbols,
+        failed_symbols,
+        bool(result.empty),
+    )
+    return result
+
+
+def _fetch_money_flow_summaries(
+    symbols: list[str], lookback_days: int, generated_at: str, max_workers: int
+) -> list[tuple[str, dict | None]]:
+    if not symbols:
+        return []
+    workers = max(1, min(max_workers, len(symbols)))
+
+    def fetch_one(symbol: str) -> tuple[str, dict | None]:
         try:
             frame = _fetch_individual_money_flow(symbol)
         except Exception:
-            continue
-        summary = _summarize_money_flow(symbol, frame, max(lookback_days, 1), generated_at)
-        if summary:
-            rows.append(summary)
-    result = pd.DataFrame(rows, columns=FLOW_COLUMNS)
-    if not result.empty:
-        result.to_csv(output_path, index=False)
-    return result
+            frame = pd.DataFrame()
+        return symbol, _summarize_money_flow(symbol, frame, lookback_days, generated_at)
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        return list(executor.map(fetch_one, symbols))
 
 
 def load_money_flow(path: Path) -> pd.DataFrame:
@@ -176,6 +213,30 @@ def _summarize_money_flow(symbol: str, frame: pd.DataFrame, lookback_days: int, 
         "latest_main_net_inflow": round(float(latest["main_net_inflow"]), 2),
         "latest_main_net_inflow_ratio": round(float(latest["main_net_inflow_ratio"]), 4),
     }
+
+
+def _write_money_flow_status(
+    path: Path,
+    generated_at: str,
+    requested_symbols: list[str],
+    fetched_symbols: list[str],
+    cached_symbols: list[str],
+    failed_symbols: list[str],
+    empty_result: bool,
+) -> None:
+    payload = {
+        "generated_at": generated_at,
+        "requested_symbols": requested_symbols,
+        "fetched_symbols": fetched_symbols,
+        "cached_symbols": cached_symbols,
+        "failed_symbols": failed_symbols,
+        "requested_count": len(requested_symbols),
+        "fetched_count": len(fetched_symbols),
+        "cached_count": len(cached_symbols),
+        "failed_count": len(failed_symbols),
+        "status": "empty" if empty_result else "cached" if cached_symbols and not fetched_symbols else "partial" if cached_symbols or failed_symbols else "updated",
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _curl_json(url: str, params: dict[str, str]) -> dict:

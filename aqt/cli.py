@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import pandas as pd
 
+from .alerts import dispatch_status_alerts
 from .config import load_config
 from .data import fetch_akshare_daily, fetch_small_cap_universe, generate_sample_data
 from .factors import load_external_factors, normalize_event_factors
@@ -12,6 +14,7 @@ from .flow import evaluate_money_flow, fetch_money_flow, load_money_flow
 from .health import fetch_stock_health, load_stock_health
 from .history import generate_account_activity_markdown, generate_history_report, update_readme_account_activity
 from .engine import run_backtest, run_paper
+from .live_dashboard import generate_live_dashboard
 from .optimize import optimize_small_cap_strategy
 from .selection import build_selection_candidates
 from .signals import generate_daily_signal
@@ -78,6 +81,18 @@ def main() -> None:
     history.add_argument("--run-dir", default="runs/smallcap_best_paper")
     history.add_argument("--output", default=None)
 
+    live_dashboard = subparsers.add_parser("live-dashboard", help="generate a local live-trading dashboard HTML")
+    live_dashboard.add_argument("--state-dir", default="local_runs/paper_live")
+    live_dashboard.add_argument("--output", default="reports/live_dashboard.html")
+    live_dashboard.add_argument("--config", default="configs/smallcap_live.yaml", help="optional strategy config for daily bars and money-flow drilldown")
+
+    status_alerts = subparsers.add_parser("status-alerts", help="dispatch warning/error run-status alerts")
+    status_alerts.add_argument("--state-dir", default="local_runs/paper_live")
+    status_alerts.add_argument("--min-severity", default="warning", choices=["info", "warning", "error", "critical"])
+    status_alerts.add_argument("--webhook-url", default=None)
+    status_alerts.add_argument("--webhook-env", default="AQT_ALERT_WEBHOOK_URL")
+    status_alerts.add_argument("--dry-run", action="store_true")
+
     activity = subparsers.add_parser("account-activity", help="generate a Markdown account activity snapshot")
     activity.add_argument("--state-dir", default="local_runs/paper_live")
     activity.add_argument("--output", default="reports/account_activity.md")
@@ -112,6 +127,16 @@ def main() -> None:
             output = Path(args.output) if args.output else Path("reports/history") / f"{run_dir.name}.html"
             path = generate_history_report(run_dir, output)
             print(path)
+            return
+        if args.command == "live-dashboard":
+            path = generate_live_dashboard(Path(args.state_dir), Path(args.output), Path(args.config) if args.config else None)
+            print(path)
+            return
+        if args.command == "status-alerts":
+            webhook_url = args.webhook_url or os.environ.get(args.webhook_env)
+            result = dispatch_status_alerts(Path(args.state_dir), args.min_severity, webhook_url, args.dry_run)
+            for key, value in result.items():
+                print(f"{key}: {value}")
             return
         if args.command == "account-activity":
             path = generate_account_activity_markdown(Path(args.state_dir), Path(args.output), args.max_rows)

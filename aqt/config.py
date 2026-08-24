@@ -31,6 +31,12 @@ class RiskConfig:
     max_order_value_pct: float
     lot_size: int
     enforce_t1: bool
+    allow_partial_fills: bool
+    max_volume_participation_pct: float
+    volume_unit_multiplier: float
+    limit_move_pct: float
+    block_buy_limit_up: bool
+    block_sell_limit_down: bool
 
 
 @dataclass(frozen=True)
@@ -154,6 +160,12 @@ def load_config(path: str | Path) -> AppConfig:
             max_order_value_pct=float(risk["max_order_value_pct"]),
             lot_size=int(risk["lot_size"]),
             enforce_t1=bool(risk["enforce_t1"]),
+            allow_partial_fills=bool(risk.get("allow_partial_fills", True)),
+            max_volume_participation_pct=float(risk.get("max_volume_participation_pct", 0.10)),
+            volume_unit_multiplier=float(risk.get("volume_unit_multiplier", 1.0)),
+            limit_move_pct=float(risk.get("limit_move_pct", 0.098)),
+            block_buy_limit_up=bool(risk.get("block_buy_limit_up", True)),
+            block_sell_limit_down=bool(risk.get("block_sell_limit_down", True)),
         ),
         health=HealthConfig(
             enabled=bool(health.get("enabled", True)),

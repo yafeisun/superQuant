@@ -117,6 +117,21 @@ bash scripts/install_local_paper_cron.sh
 python -m aqt.cli account-activity --state-dir local_runs/paper_live --output reports/account_activity.md --update-readme
 ```
 
+生成本地操作和实盘跟踪看板：
+
+```bash
+python -m aqt.cli live-dashboard --state-dir local_runs/paper_live --output reports/live_dashboard.html --config configs/smallcap_live.yaml
+```
+
+看板会按单票补最近 K 线、资金流摘要和订单 / 成交 / 拒单时间线。
+
+运行状态告警会写入 `local_runs/paper_live/status/`。配置 webhook 后可推送 warning/error：
+
+```bash
+export AQT_ALERT_WEBHOOK_URL="https://example.com/webhook"
+python -m aqt.cli status-alerts --state-dir local_runs/paper_live
+```
+
 <!-- account-activity:start -->
 ### 账户实际操作和持仓
 

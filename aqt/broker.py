@@ -41,7 +41,27 @@ class PaperBroker:
                 self._reject(order, "below_lot_size")
                 continue
 
-            fill = self._execute_order(normalized, bar)
+            block_reason = self._trade_block_reason(normalized, bar)
+            if block_reason:
+                self._reject(normalized, block_reason)
+                continue
+
+            executable = self._volume_adjusted_order(normalized, bar)
+            if executable is None:
+                self._reject(normalized, "volume_limit")
+                continue
+            if executable.quantity < normalized.quantity:
+                residual = Order(
+                    normalized.symbol,
+                    normalized.side,
+                    normalized.quantity - executable.quantity,
+                    normalized.created_at,
+                    normalized.reason,
+                    normalized.limit_price,
+                )
+                self._reject(residual, "partial_fill_volume_limit")
+
+            fill = self._execute_order(executable, bar)
             if fill:
                 fills.append(fill)
                 self.fills.append(fill)
@@ -52,10 +72,54 @@ class PaperBroker:
         qty = (order.quantity // lot) * lot
         return Order(order.symbol, order.side, qty, order.created_at, order.reason, order.limit_price)
 
+    def _trade_block_reason(self, order: Order, bar: Bar) -> str | None:
+        if order.limit_price is not None:
+            if order.side == Side.BUY and order.limit_price < bar.low:
+                return "buy_limit_not_reached"
+            if order.side == Side.SELL and order.limit_price > bar.high:
+                return "sell_limit_not_reached"
+
+        change = self._bar_return(bar)
+        if change is None:
+            return None
+        if (
+            order.side == Side.BUY
+            and self.risk_config.block_buy_limit_up
+            and change >= self.risk_config.limit_move_pct
+            and self._near(bar.close, bar.high)
+        ):
+            return "limit_up_no_buy"
+        if (
+            order.side == Side.SELL
+            and self.risk_config.block_sell_limit_down
+            and change <= -self.risk_config.limit_move_pct
+            and self._near(bar.close, bar.low)
+        ):
+            return "limit_down_no_sell"
+        return None
+
+    def _volume_adjusted_order(self, order: Order, bar: Bar) -> Order | None:
+        pct = self.risk_config.max_volume_participation_pct
+        if pct <= 0:
+            return order
+        effective_volume = bar.volume * max(self.risk_config.volume_unit_multiplier, 0.0)
+        if effective_volume <= 0:
+            return None
+        lot = self.risk_config.lot_size
+        max_quantity = int(effective_volume * pct)
+        max_quantity = (max_quantity // lot) * lot
+        if max_quantity <= 0:
+            return None
+        if order.quantity <= max_quantity:
+            return order
+        if not self.risk_config.allow_partial_fills:
+            return None
+        return Order(order.symbol, order.side, max_quantity, order.created_at, order.reason, order.limit_price)
+
     def _execute_order(self, order: Order, bar: Bar) -> Fill | None:
         raw_price = order.limit_price if order.limit_price is not None else bar.close
         slip = self.account_config.slippage_bps / 10000.0
-        price = raw_price * (1.0 + slip if order.side == Side.BUY else 1.0 - slip)
+        price = self._fill_price(order, raw_price, slip, bar)
         gross_value = price * order.quantity
         commission = max(gross_value * self.account_config.commission_rate, self.account_config.min_commission)
         tax = gross_value * self.account_config.stamp_tax_rate if order.side == Side.SELL else 0.0
@@ -66,6 +130,19 @@ class PaperBroker:
         if order.side == Side.BUY:
             return self._buy(order, price, gross_value, commission, tax, position, bar)
         return self._sell(order, price, gross_value, commission, tax, position, bar)
+
+    def _fill_price(self, order: Order, raw_price: float, slip: float, bar: Bar) -> float:
+        if order.side == Side.BUY:
+            price = raw_price * (1.0 + slip)
+            price = min(price, bar.high) if bar.high > 0 else price
+            if order.limit_price is not None:
+                price = min(price, order.limit_price)
+            return price
+        price = raw_price * (1.0 - slip)
+        price = max(price, bar.low) if bar.low > 0 else price
+        if order.limit_price is not None:
+            price = max(price, order.limit_price)
+        return price
 
     def _buy(
         self,
@@ -134,3 +211,14 @@ class PaperBroker:
                 "strategy_reason": order.reason,
             }
         )
+
+    @staticmethod
+    def _bar_return(bar: Bar) -> float | None:
+        if bar.previous_close is None or bar.previous_close <= 0:
+            return None
+        return bar.close / bar.previous_close - 1.0
+
+    @staticmethod
+    def _near(left: float, right: float) -> bool:
+        scale = max(abs(left), abs(right), 1.0)
+        return abs(left - right) <= scale * 1e-4

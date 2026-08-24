@@ -19,7 +19,7 @@ def run_backtest(config: AppConfig) -> Dict[str, Path]:
 
 
 def run_paper(config: AppConfig, cycles: int | None) -> Dict[str, Path]:
-    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end)
+    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end, strict=False)
     return _run_event_loop(config, config.output.paper_dir, max_cycles=cycles, market_data=market_data)
 
 

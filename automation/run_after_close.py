@@ -14,6 +14,7 @@ from aqt.config import load_config
 from aqt.data import fetch_akshare_daily
 from aqt.engine import run_paper
 from aqt.health import fetch_stock_health, healthy_symbols, load_stock_health, write_health_report
+from aqt.run_status import write_run_status
 from aqt.signals import generate_daily_signal
 
 
@@ -31,6 +32,14 @@ def main() -> None:
     target_date = parse_calendar_date(args.market_end or args.date, today)
     if not args.force and not is_a_share_trading_day(target_date):
         print(f"skip: {target_date.isoformat()} is not an A-share trading day")
+        write_run_status(
+            Path(args.output_root),
+            "after_close",
+            "skipped_non_trading_day",
+            target_date,
+            "info",
+            "target date is not an A-share trading day",
+        )
         return
 
     config = _with_market_end(load_config(args.config), args.market_end)
@@ -41,6 +50,15 @@ def main() -> None:
         output_dir = Path(args.output_root) / output_date
         output_dir.mkdir(parents=True, exist_ok=True)
         _write_no_eligible_report(output_dir, args.config, target_date, health, config.health)
+        write_run_status(
+            Path(args.output_root),
+            "after_close",
+            "no_eligible_symbols",
+            target_date,
+            "warning",
+            "health filters removed all symbols",
+            {"output_dir": output_dir, "health_rows": len(health)},
+        )
         print(output_dir)
         return
 
@@ -65,6 +83,15 @@ def main() -> None:
     if not health.empty:
         write_health_report(health, config.health, output_dir / "health.csv")
     _write_manifest(output_dir, args.config, signal_date, "after_close")
+    write_run_status(
+        Path(args.output_root),
+        "after_close",
+        "ok",
+        signal_date,
+        "info",
+        "after-close selection completed",
+        {"output_dir": output_dir, "eligible_symbols": len(healthy)},
+    )
     print(output_dir)
 
 

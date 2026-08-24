@@ -114,9 +114,7 @@ def screen_buy_orders(
                 reasons.extend(_split_reasons(health_row.get("block_reasons")) or ["health_score_too_low"])
         flow_row = flow_map.get(order.symbol, {})
         if config.flow.enabled:
-            if not flow_row:
-                reasons.append("money_flow_missing")
-            elif not _truthy(flow_row.get("flow_confirmed")):
+            if flow_row and not _truthy(flow_row.get("flow_confirmed")):
                 reasons.extend(_split_reasons(flow_row.get("block_reasons")) or ["money_flow_not_confirmed"])
         factor_row = factor_map.get(order.symbol, {})
         if config.factors.enabled:

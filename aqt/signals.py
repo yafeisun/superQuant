@@ -14,7 +14,7 @@ from .strategy import build_strategy
 
 def generate_daily_signal(config: AppConfig, output_dir: Path) -> Dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end)
+    market_data = load_market_data(config.data.path, config.data.symbols, config.data.start, config.data.end, strict=False)
     all_bars = list(iter_bars(market_data))
     if not all_bars:
         raise RuntimeError("no market data loaded")

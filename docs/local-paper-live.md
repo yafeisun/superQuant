@@ -1,6 +1,6 @@
 # 本地虚拟实盘
 
-本地虚拟实盘用于在没有真实交易账号时模拟运行策略。它不连接券商，不真实下单；策略产生的订单会交给本地 `PaperBroker` 撮合，按收盘价加滑点默认成交，并记录佣金、印花税、100 股手数和 T+1 可卖约束。
+本地虚拟实盘用于在没有真实交易账号时模拟运行策略。它不连接券商，不真实下单；策略产生的订单会交给本地 `PaperBroker` 撮合，按 bar 区间、限价、涨跌停、成交量参与率、滑点、佣金、印花税、100 股手数和 T+1 可卖约束保守模拟。
 
 ## 启动方式
 
@@ -38,6 +38,9 @@ positions.csv                  当前持仓、成本、浮盈、收益率
 fills.csv                      模拟成交流水
 rejections.csv                 风控拒单流水
 processed_dates.csv            已执行日期，防止同一天重复成交
+quotes.csv                     盘中行情缓存，用于实时接口失败时兜底
+status/latest_*.json           最近一次运行状态
+status/events.jsonl            运行状态事件流
 decisions/YYYYMMDD/summary.txt 当日运行摘要
 decisions/YYYYMMDD/selection_candidates.csv 全股票池候选评分、买入/等待/阻断原因
 decisions/YYYYMMDD/orders.csv  当日买卖计划、成交状态、原因
@@ -50,6 +53,40 @@ decisions/YYYYMMDD/external_factors.csv 新闻/事件/宏观因子评分和原�
 同一天重复运行默认不会再次执行买卖，防止重复成交。确实需要重放测试时加 `--rerun`。
 
 每天虚拟实盘结束后会固定输出候选和持仓总结。候选总结覆盖全股票池，标记 `BUY_READY`、`BUY_WAIT` 或 `BLOCK`，并写清楚健康、主力资金、动量、波动、回撤、买点位置和目标空间。持仓总结包含成本、现价、浮盈亏、止损支撑位、止盈目标位、短期趋势、健康状态、卖出判断和后续建议。
+
+## 本地看板
+
+生成操作和实盘跟踪看板：
+
+```bash
+source .venv/bin/activate
+python -m aqt.cli live-dashboard --state-dir local_runs/paper_live --output reports/live_dashboard.html
+```
+
+看板会汇总最近运行状态、账户权益、持仓、操作建议、订单、候选股、盘中行情缓存、盘中事件、成交和拒单。默认读取 `configs/smallcap_live.yaml`，给每只持仓 / 候选 / 最近操作标的补最近 K 线、本地资金流指标和订单 / 成交 / 拒单时间线；其他配置可加 `--config path/to/config.yaml`。
+
+它是静态 HTML，不需要启动服务；每次运行命令会刷新文件。
+
+`automation.run_local_paper_live` 和 `automation.run_local_intraday_paper` 默认会在每次运行结束后刷新这份看板。需要跳过时加 `--no-dashboard`，需要换输出位置时加 `--dashboard-output`。
+
+## 状态告警
+
+运行状态统一写在 `local_runs/paper_live/status/`：
+
+```text
+latest_paper_live.json
+latest_intraday_paper.json
+events.jsonl
+alerts.jsonl
+```
+
+本地检查并派发 warning / error：
+
+```bash
+python -m aqt.cli status-alerts --state-dir local_runs/paper_live
+```
+
+如果配置 `AQT_ALERT_WEBHOOK_URL`，脚本会把新 warning / error POST 到这个 webhook；没有配置时会写入本地 `alerts.jsonl` outbox，避免静默丢失。自动实盘入口会在每次运行结束后尝试派发一次。
 
 ## 盘中盯盘口
 
@@ -111,6 +148,19 @@ bash scripts/install_local_paper_cron.sh
 因此高动量股票也可能只给 `BUY_WAIT`，系统会等价格和资金流更合适再买。
 
 健康数据是买入前置条件：如果停牌、ST、换手率、PE、市值等关键数据源不可用，系统不会新开仓，只继续监控已有持仓并允许按技术位卖出。
+
+## 串行和并行边界
+
+交易决策、订单执行、账本写入和同日防重跑保持串行，确保每一次操作可复盘、可解释、可重放。数据抓取和因子更新可以并行；当前主力资金抓取已经按股票并发，默认最多 4 个 worker，避免接口抖动导致整条链路卡死。
+
+## 本地撮合假设
+
+本地 `PaperBroker` 仍然只是纸盘撮合，不代表真实成交。它现在会：
+
+- 拒绝未触及 bar 区间的限价单。
+- 拒绝涨停买入和跌停卖出。
+- 按 `risk.max_volume_participation_pct` 限制单笔成交量，超过部分在允许部分成交时写成 `partial_fill_volume_limit` 拒单。
+- 用 `risk.volume_unit_multiplier` 把数据源成交量换算为股；小盘实盘配置按 1 手=100 股处理。
 
 ## 交易日和策略规则
 

@@ -18,6 +18,12 @@ risk:
   max_order_value_pct: 0.40
   lot_size: 100
   enforce_t1: true
+  allow_partial_fills: true
+  max_volume_participation_pct: 0.10
+  volume_unit_multiplier: 1
+  limit_move_pct: 0.098
+  block_buy_limit_up: true
+  block_sell_limit_down: true
 
 strategy:
   name: moving_average_cross

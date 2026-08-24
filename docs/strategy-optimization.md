@@ -92,7 +92,7 @@ Backtests must include:
 - Survivorship-bias control: use point-in-time universe membership when available; mark current static universes as biased.
 - Stress tests: higher slippage, lower liquidity, delayed execution, gap down, forced exit, market-wide selloff.
 
-The current engine already models fees, slippage, lot size, T+1, and order rejections. The stress-test CLI reruns baseline, higher slippage, doubled costs, and market-shock scenarios:
+The current engine already models fees, slippage, lot size, T+1, limit-price touch checks, limit-up buy blocks, limit-down sell blocks, liquidity-aware partial fills, and order rejections. The stress-test CLI reruns baseline, higher slippage, doubled costs, lower liquidity, tighter volume participation, and market-shock scenarios:
 
 ```bash
 python -m aqt.cli stress-test --config configs/smallcap.yaml --output runs/stress_test
@@ -105,5 +105,4 @@ It still does not have a point-in-time full-market universe. Until that exists, 
 1. Add a point-in-time universe builder with listed/delisted dates, ST date ranges, and board filters.
 2. Add reliable fundamentals and point-in-time financial statement factors.
 3. Connect real news/social/macro data collectors with source provenance, not hand-built placeholder files.
-4. Extend stress tests with liquidity-aware partial fills after volume units are normalized.
-5. Add walk-forward validation: train/select parameters on one period, freeze them, then evaluate only on a later out-of-sample period.
+4. Add walk-forward validation: train/select parameters on one period, freeze them, then evaluate only on a later out-of-sample period.

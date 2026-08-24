@@ -328,18 +328,78 @@ def _fetch_quote_row(symbol: str) -> dict | None:
     }
 
 
+def _fetch_suspended_symbols() -> set[str]:
+    symbols: set[str] = set()
+    today = datetime.now().strftime("%Y%m%d")
+    try:
+        from akshare.stock_feature import stock_tfp_em
+
+        frame = stock_tfp_em.stock_tfp_em(date=today)
+        symbols.update(_symbols_from_frame(frame))
+    except Exception:
+        pass
+    try:
+        from akshare.stock import stock_stop
+
+        frame = stock_stop.stock_staq_net_stop()
+        symbols.update(_symbols_from_frame(frame))
+    except Exception:
+        pass
+    try:
+        from akshare.stock import stock_zh_a_special
+
+        frame = stock_zh_a_special.stock_zh_a_stop_em()
+        symbols.update(_symbols_from_frame(frame))
+    except Exception:
+        pass
+    return symbols
+
+
+def _fetch_st_symbols() -> set[str]:
+    symbols: set[str] = set()
+    try:
+        from akshare.stock import stock_zh_a_special
+
+        frame = stock_zh_a_special.stock_zh_a_st_em()
+        symbols.update(_symbols_from_frame(frame))
+    except Exception:
+        pass
+    return symbols
+
+
 def _scale_quote_value(value) -> float:
     if value is None or value == "-":
         return 0.0
     return _safe_float(value) / 100.0
 
 
-def _fetch_suspended_symbols() -> set[str]:
-    return set()
-
-
-def _fetch_st_symbols() -> set[str]:
-    return set()
+def _symbols_from_frame(frame: pd.DataFrame | None) -> set[str]:
+    if frame is None or frame.empty:
+        return set()
+    columns = [
+        "代码",
+        "股票代码",
+        "证券代码",
+        "symbol",
+        "code",
+    ]
+    values = None
+    for column in columns:
+        if column in frame.columns:
+            values = frame[column]
+            break
+    if values is None:
+        values = frame.iloc[:, 0]
+    symbols: set[str] = set()
+    for value in values.dropna().tolist():
+        text = str(value).strip()
+        if not text or text in {"-", "None", "nan"}:
+            continue
+        try:
+            symbols.add(_normalize_symbol(text))
+        except Exception:
+            continue
+    return symbols
 
 
 def _normalize_symbol(code: str) -> str:

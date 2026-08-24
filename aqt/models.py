@@ -20,6 +20,7 @@ class Bar:
     low: float
     close: float
     volume: float
+    previous_close: Optional[float] = None
 
 
 @dataclass(frozen=True)

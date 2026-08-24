@@ -42,6 +42,24 @@ def run_stress_test(config: AppConfig, output_dir: Path) -> dict[str, Path]:
             "double commission and stamp tax, raise slippage floor to 8 bps",
         ),
         (
+            "liquidity_half_volume",
+            config,
+            _scale_volume(market_data, 0.50),
+            "halve traded volume to stress liquidity-aware partial fills",
+        ),
+        (
+            "liquidity_5pct_participation",
+            replace(
+                config,
+                risk=replace(
+                    config.risk,
+                    max_volume_participation_pct=min(config.risk.max_volume_participation_pct, 0.05),
+                ),
+            ),
+            market_data,
+            "cap each order at 5% of daily traded volume",
+        ),
+        (
             "market_shock_5pct",
             config,
             _shock_market_data(market_data, shock_date, -0.05),
@@ -183,6 +201,15 @@ def _shock_market_data(market_data: Dict[str, pd.DataFrame], shock_date: str, sh
             changed.loc[mask, column] = changed.loc[mask, column].astype(float) * multiplier
         shocked[symbol] = changed
     return shocked
+
+
+def _scale_volume(market_data: Dict[str, pd.DataFrame], multiplier: float) -> Dict[str, pd.DataFrame]:
+    scaled: Dict[str, pd.DataFrame] = {}
+    for symbol, frame in market_data.items():
+        changed = frame.copy()
+        changed["volume"] = pd.to_numeric(changed["volume"], errors="coerce").fillna(0.0) * multiplier
+        scaled[symbol] = changed
+    return scaled
 
 
 def _write_summary(path: Path, scenarios: list[dict], checks: list[dict]) -> None:
