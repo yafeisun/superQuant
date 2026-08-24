@@ -1,2 +1,3 @@
 time,signal_date,rebalance_day,next_rebalance_in_trading_days,equity,cash,positions,planned_orders,allow_orders,block_orders,order_symbols,watch_symbols,total_return,max_drawdown,win_rate,total_cost
 1040,2026-08-24,False,13,1519323.40,1519323.40,0,0,0,0,,002883.SZ;002909.SZ;002923.SZ;003016.SZ;003017.SZ;003020.SZ;003023.SZ;603655.SH;603679.SH;603721.SH,0.519323,-0.472708,0.420561,50895.9807
+1054,2026-08-24,False,13,1679707.84,1679707.84,0,0,0,0,,002883.SZ;002909.SZ;002923.SZ;003016.SZ;003017.SZ;003020.SZ;003023.SZ;603655.SH;603679.SH;603721.SH,0.679708,-0.418511,0.431452,62382.7429
