@@ -74,6 +74,13 @@ strategy:
   entry_min_below_target_pct: 0.05
   entry_max_recent_runup_pct: 0.10
   entry_min_trend_slope: -0.01
+  capital_recycle_enabled: true
+  capital_recycle_min_holding_days: 15
+  capital_recycle_max_holding_days: 45
+  capital_recycle_rank_multiplier: 2
+  capital_recycle_min_momentum: 0.00
+  capital_recycle_breakeven_buffer_pct: 0.003
+  capital_recycle_max_loss_pct: -0.06
 
 output:
   backtest_dir: runs/smallcap_oos_backtest

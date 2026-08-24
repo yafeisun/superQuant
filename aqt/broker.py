@@ -67,6 +67,9 @@ class PaperBroker:
                 self.fills.append(fill)
         return fills
 
+    def reject_order(self, order: Order, reason: str) -> None:
+        self._reject(order, reason)
+
     def _normalize_lot(self, order: Order) -> Order:
         lot = self.risk_config.lot_size
         qty = (order.quantity // lot) * lot

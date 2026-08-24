@@ -9,7 +9,7 @@ import pandas as pd
 from .broker import PaperBroker
 from .config import AppConfig
 from .data import iter_bars, load_market_data
-from .models import Fill, Position
+from .models import Bar, Fill, Order, Position, Side
 from .strategy import build_strategy
 
 
@@ -45,7 +45,9 @@ def _run_event_loop(
         if max_cycles is not None and index > max_cycles:
             break
         broker.mark_to_market(bars)
-        orders = strategy.on_bars(bars, broker.account)
+        strategy_bars = _strategy_bars(config, bars, broker.account.positions)
+        orders = strategy.on_bars(strategy_bars, broker.account)
+        orders = _gate_universe_orders(config, orders, broker)
         fills = broker.execute_orders(orders, {bar.symbol: bar for bar in bars})
         broker.mark_to_market(bars)
 
@@ -83,6 +85,32 @@ def _run_event_loop(
     pd.DataFrame([metrics]).to_csv(paths["metrics"], index=False)
     _write_summary(paths["summary"], metrics)
     return paths
+
+
+def _strategy_bars(config: AppConfig, bars: List[Bar], positions: Dict[str, Position]) -> List[Bar]:
+    universe = config.data.universe
+    if universe is None:
+        return bars
+    result = []
+    for bar in bars:
+        position = positions.get(bar.symbol)
+        held = bool(position and position.quantity > 0)
+        if held or universe.is_symbol_eligible(bar.symbol, bar.date):
+            result.append(bar)
+    return result
+
+
+def _gate_universe_orders(config: AppConfig, orders: List[Order], broker: PaperBroker) -> List[Order]:
+    universe = config.data.universe
+    if universe is None:
+        return orders
+    accepted: List[Order] = []
+    for order in orders:
+        if order.side == Side.BUY and not universe.is_symbol_eligible(order.symbol, order.created_at):
+            broker.reject_order(order, "universe_ineligible")
+            continue
+        accepted.append(order)
+    return accepted
 
 
 def _fill_to_row(fill: Fill) -> dict:

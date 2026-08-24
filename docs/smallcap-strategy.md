@@ -16,7 +16,8 @@
 8. 买入前必须通过买点评估：不能离支撑位太远，不能贴近目标位追高，不能刚短线急拉，趋势不能明显走弱。
 9. 只有 `BUY_READY` 可以生成买入订单；`BUY_WAIT` 和 `BLOCK` 都会写明原因。
 10. 已有持仓每天做卖点评估，输出止损支撑、止盈目标、距止损/目标空间、趋势和卖出原因。
-11. 执行层模拟 A 股 100 股整手、T+1、佣金、最低佣金、卖出印花税、滑点、单票/单笔限制。
+11. 低效持仓触发资金效率退出：长期跑输、动量不足、已回到保本区或滞留过久的标的，优先卖出收回本金，给更强候选腾出仓位。
+12. 执行层模拟 A 股 100 股整手、T+1、佣金、最低佣金、卖出印花税、滑点、单票/单笔限制。
 
 当前历史最优配置在 [configs/smallcap_best.yaml](/home/chery/Documents/Quant/configs/smallcap_best.yaml)：
 
@@ -106,6 +107,7 @@ local_runs/paper_live/decisions/YYYYMMDD/selection_candidates.csv
 ```bash
 source .venv/bin/activate
 python -m aqt.cli fetch-smallcap-universe --limit 20 --min-market-cap 2000000000 --max-market-cap 12000000000
+python -m aqt.cli fetch-smallcap-universe --point-in-time --as-of 2026-08-24 --limit 20
 python -m aqt.cli fetch-akshare --config configs/smallcap_best.yaml --adjust qfq
 python -m aqt.cli backtest --config configs/smallcap_best.yaml
 python -m aqt.cli paper-run --config configs/smallcap_best.yaml
@@ -140,6 +142,24 @@ risk_reward_ratio: 2.0
 
 卖出不再是“跌到某个固定百分比就砍”。只有跌破支撑位且短期趋势走弱，才生成卖出；涨到看涨目标位后，如果短期趋势衰减，才生成止盈卖出；ST/退市风险会触发健康退出。每日输出 `sell_points.csv` 和 `position_advice.md`，明确每个持仓的卖点、止盈目标、距止损/目标空间和继续持有理由。
 
+## 资金效率退出
+
+`small_cap_momentum` 现在会跟踪每个持仓进入组合后的持有天数。如果持仓已经过了最小观察期，但排名掉到有效候选范围外或动量低于阈值，并且已经回到保本缓冲区，策略会生成 `capital_recycle_breakeven` 卖出信号，优先收回本金。若持仓超过最长容忍天数仍然没有改善，会按 `capital_recycle_stale` 或 `capital_recycle_damage_control` 退出，避免资金长期低效占用。
+
+当前 smallcap 系列配置：
+
+```yaml
+capital_recycle_enabled: true
+capital_recycle_min_holding_days: 15
+capital_recycle_max_holding_days: 45
+capital_recycle_rank_multiplier: 2
+capital_recycle_min_momentum: 0.00
+capital_recycle_breakeven_buffer_pct: 0.003
+capital_recycle_max_loss_pct: -0.06
+```
+
+如果当天因为技术位或资金效率规则卖出，策略允许同日把释放的资金买入排名更好的候选；非调仓日不会额外卖出其他正常持仓。
+
 参数搜索：
 
 ```bash
@@ -151,6 +171,18 @@ python -m aqt.cli optimize-smallcap --config configs/smallcap.yaml --momentum-wi
 ```text
 runs/optimize_smallcap/leaderboard.csv
 ```
+
+Walk-forward 验证：
+
+```bash
+python -m aqt.cli walk-forward --config configs/smallcap.yaml --output runs/walk_forward --train-start 2021-01-04 --train-end 2024-12-31 --test-start 2025-01-02 --test-end 2026-08-18
+```
+
+输出：
+
+- `runs/walk_forward/train/optimize/leaderboard.csv`：只用训练区间产生的参数排行榜。
+- `runs/walk_forward/out_of_sample/metrics.csv`：冻结最优参数后在样本外区间的指标。
+- `runs/walk_forward/summary.csv` 和 `summary.md`：训练 / 样本外对照。
 
 ## 当前结果
 
@@ -205,16 +237,15 @@ runs/smallcap_best_paper/trades.csv
 这个结果不能直接理解成未来可复现收益。当前版本仍有几个重要限制：
 
 - 小盘池目前在行情列表接口不稳定时会 fallback 到内置候选池，文件里用 `source=bootstrap` 标记。
-- 未做严格样本内/样本外切分，参数搜索仍可能过拟合。
+- 已提供 walk-forward 命令拆分训练和样本外验证；如果只看普通 backtest 或 optimize 结果，参数搜索仍可能过拟合。
 - 已加入基础停牌、ST、涨停、流动性、PE、市值过滤，但公开数据源可能延迟或缺失；真实交易前仍必须用券商盘口和交易所状态复核。
 - 当前用日线收盘价撮合，不是分钟/Tick 级成交模拟。
 - 真实接券商账号前必须增加账户同步、撤单状态机、盘中风控和盘后对账。
 
-下一步应该做更严格样本外验证：用 2021-2024 搜参数，用 2025-2026 只验证，不再调参。
-
-当前已提供样本外验证配置：
+当前已提供样本外验证和压力测试命令：
 
 ```bash
+python -m aqt.cli walk-forward --config configs/smallcap.yaml --output runs/walk_forward
 python -m aqt.cli backtest --config configs/smallcap_oos.yaml
 python -m aqt.cli report --run-dir runs/smallcap_oos_backtest
 python -m aqt.cli stress-test --config configs/smallcap.yaml --output runs/stress_test

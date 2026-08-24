@@ -164,6 +164,16 @@ def _survivorship_check(config: AppConfig) -> dict:
     path = config.data.symbols_file
     if path is None or not path.exists():
         return _check("survivorship_bias_control", "WARN", "no symbols_file with point-in-time universe metadata")
+    universe = config.data.universe
+    if universe is not None:
+        warnings = universe.metadata_warnings()
+        if warnings:
+            return _check("survivorship_bias_control", "WARN", "; ".join(warnings))
+        return _check(
+            "survivorship_bias_control",
+            "PASS",
+            f"{path} loaded with point-in-time daily eligibility gate",
+        )
     try:
         frame = pd.read_csv(path, nrows=5)
     except pd.errors.EmptyDataError:

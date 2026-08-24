@@ -6,12 +6,15 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from .universe import PointInTimeUniverse, read_symbols_file
+
 
 @dataclass(frozen=True)
 class DataConfig:
     path: Path
     symbols: List[str]
     symbols_file: Optional[Path]
+    universe: Optional[PointInTimeUniverse]
     start: str
     end: str
 
@@ -100,6 +103,13 @@ class StrategyConfig:
     entry_min_below_target_pct: float
     entry_max_recent_runup_pct: float
     entry_min_trend_slope: float
+    capital_recycle_enabled: bool
+    capital_recycle_min_holding_days: int
+    capital_recycle_max_holding_days: int
+    capital_recycle_rank_multiplier: int
+    capital_recycle_min_momentum: float
+    capital_recycle_breakeven_buffer_pct: float
+    capital_recycle_max_loss_pct: float
 
 
 @dataclass(frozen=True)
@@ -136,15 +146,16 @@ def load_config(path: str | Path) -> AppConfig:
 
     symbols = list(data.get("symbols", []))
     symbols_file = Path(data["symbols_file"]) if data.get("symbols_file") else None
+    universe = None
     if symbols_file and symbols_file.exists():
-        symbol_frame = _read_symbols_file(symbols_file)
-        symbols = symbol_frame
+        symbols, universe = read_symbols_file(symbols_file, str(data["start"]), str(data["end"]))
 
     return AppConfig(
         data=DataConfig(
             path=Path(data["path"]),
             symbols=symbols,
             symbols_file=symbols_file,
+            universe=universe,
             start=str(data["start"]),
             end=str(data["end"]),
         ),
@@ -221,23 +232,16 @@ def load_config(path: str | Path) -> AppConfig:
             entry_min_below_target_pct=float(strategy.get("entry_min_below_target_pct", 0.03)),
             entry_max_recent_runup_pct=float(strategy.get("entry_max_recent_runup_pct", 0.12)),
             entry_min_trend_slope=float(strategy.get("entry_min_trend_slope", -0.02)),
+            capital_recycle_enabled=bool(strategy.get("capital_recycle_enabled", False)),
+            capital_recycle_min_holding_days=int(strategy.get("capital_recycle_min_holding_days", 15)),
+            capital_recycle_max_holding_days=int(strategy.get("capital_recycle_max_holding_days", 45)),
+            capital_recycle_rank_multiplier=int(strategy.get("capital_recycle_rank_multiplier", 2)),
+            capital_recycle_min_momentum=float(strategy.get("capital_recycle_min_momentum", 0.0)),
+            capital_recycle_breakeven_buffer_pct=float(strategy.get("capital_recycle_breakeven_buffer_pct", 0.003)),
+            capital_recycle_max_loss_pct=float(strategy.get("capital_recycle_max_loss_pct", -0.06)),
         ),
         output=OutputConfig(
             backtest_dir=Path(output["backtest_dir"]),
             paper_dir=Path(output["paper_dir"]),
         ),
     )
-
-
-def _read_symbols_file(path: Path) -> List[str]:
-    symbols: List[str] = []
-    with path.open("r", encoding="utf-8") as file:
-        for line in file:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            symbol = stripped.split(",")[0]
-            if symbol.lower() == "symbol":
-                continue
-            symbols.append(symbol)
-    return symbols

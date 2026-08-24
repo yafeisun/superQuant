@@ -23,6 +23,9 @@
 - [x] 看板数据钻取：`aqt/live_dashboard.py` 已按单票展示最近 K 线、持仓/候选/资金流指标和订单/成交/拒单时间线。
 - [x] 执行层保守撮合：`aqt/broker.py` 已加入限价触及检查、涨停买/跌停卖拦截、成交量参与率上限和部分成交剩余拒单。
 - [x] 流动性压力测试：`aqt/stress.py` 已加入半成交量和 5% 成交量参与率场景，覆盖部分成交对收益/回撤/拒单的影响。
+- [x] Point-in-time universe 消费层：`aqt/universe.py` 已支持 `universe_date` / `listed_date` / `valid_from` / `valid_to` / ST 区间解析，回测每日只允许当日合格标的开新仓。
+- [x] Walk-forward 验证命令：`aqt.cli walk-forward` 已把训练区间搜参和样本外区间验证拆开，输出冻结参数和 OOS 指标。
+- [x] 资金效率退出：`small_cap_momentum` 已加入低效持仓本金回收 / 滞留退出规则，退出后允许同日把资金轮动到排名更好的标的。
 
 ## P0 先修
 
@@ -30,8 +33,7 @@
 
 ## P1 策略和验证
 
-- [ ] Point-in-time universe builder：补 listed / delisted / ST 区间和 board filter，替换当前 bootstrap 小盘池。
-- [ ] Walk-forward 验证：参数搜索和样本外评估拆开，冻结参数后只看后验区间。
+- [ ] 真实 point-in-time 数据源：补可靠的上市日期、退市日期、历史 ST 区间和历史 board filter，替换当前 bootstrap / snapshot 小盘池。
 - [ ] 外部因子追踪：给 event / macro 因子补 raw source、model、prompt version、hash 和 `source_url` 的落盘审计。
 - [ ] 看板交互增强：增加只看持仓 / 只看候选 / 只看异常的筛选，以及单票历史导出。
 

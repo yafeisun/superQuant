@@ -53,6 +53,8 @@ aqt/
   engine.py        回测和虚拟实盘主循环
   models.py        订单、成交、账户、持仓等领域对象
   strategy.py      策略接口和均线交叉样例策略
+  universe.py      point-in-time 股票池解析和每日资格判断
+  walk_forward.py  训练区间搜参、样本外冻结验证
 configs/demo.yaml  示例配置
 docs/roadmap.md    分阶段搭建指南
 ```
@@ -72,9 +74,11 @@ docs/roadmap.md    分阶段搭建指南
 source .venv/bin/activate
 python -m aqt.cli fetch-akshare --config configs/smallcap_best.yaml --adjust qfq
 python -m aqt.cli fetch-money-flow --config configs/smallcap_live.yaml
+python -m aqt.cli fetch-smallcap-universe --point-in-time --as-of 2026-08-24 --limit 20
 python -m aqt.cli ingest-event-factors --input data/factors/events.jsonl --output data/factors/events.csv
 python -m aqt.cli selection-candidates --config configs/smallcap_live.yaml --output reports/selection_candidates.csv
 python -m aqt.cli paper-run --config configs/smallcap_best.yaml
+python -m aqt.cli walk-forward --config configs/smallcap.yaml --output runs/walk_forward
 python -m aqt.cli stress-test --config configs/smallcap.yaml --output runs/stress_test
 python -m aqt.cli report --run-dir runs/smallcap_best_paper
 python -m aqt.cli history-report --run-dir runs/smallcap_best_paper --output /tmp/smallcap_best_paper_history.html
@@ -101,7 +105,7 @@ python -m automation.run_local_paper_live --config configs/smallcap_live.yaml
 python -m automation.run_local_paper_live --config configs/smallcap_live.yaml --no-fetch --no-refresh-factors
 ```
 
-账本默认写入 `local_runs/paper_live/`，包含账户、持仓、成交、权益曲线和每日决策。每日决策目录会保存 `selection_candidates.csv`、`orders.csv`、`position_advice.csv`、`sell_points.csv`、`health.csv`、`money_flow.csv` 和 `external_factors.csv`，用于复盘每只股票为什么买、为什么等、为什么卖或继续持有。该目录默认不提交到 GitHub。
+账本默认写入 `local_runs/paper_live/`，包含账户、持仓、成交、权益曲线和每日决策。每日决策目录会保存 `selection_candidates.csv`、`orders.csv`、`position_advice.csv`、`sell_points.csv`、`health.csv`、`money_flow.csv` 和 `external_factors.csv`，用于复盘每只股票为什么买、为什么等、为什么卖或继续持有。小盘策略还会把低效持仓的资金回收退出写成 `capital_recycle_*` 成交原因。该目录默认不提交到 GitHub。
 
 本地定时任务安装：
 

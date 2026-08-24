@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from .models import Bar
+from .universe import infer_board
 
 
 REQUIRED_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
@@ -153,12 +154,17 @@ def fetch_small_cap_universe(
     limit: int,
     min_market_cap: float,
     max_market_cap: float,
+    point_in_time: bool = False,
+    as_of: str | None = None,
 ) -> Path:
     output_file.parent.mkdir(parents=True, exist_ok=True)
+    universe_date = as_of or date.today().isoformat()
     try:
         rows = _fetch_eastmoney_stock_list(max(limit * 25, 500))
+        source = "eastmoney"
     except Exception:
         rows = _bootstrap_small_cap_rows()
+        source = "bootstrap"
     selected = []
     for row in rows:
         code = str(row.get("f12", ""))
@@ -179,6 +185,7 @@ def fetch_small_cap_universe(
                 "name": name,
                 "total_market_cap": total_market_cap,
                 "turnover_rate": turnover_rate,
+                "source": source,
             }
         )
         if len(selected) >= limit:
@@ -186,8 +193,27 @@ def fetch_small_cap_universe(
 
     if not selected:
         selected = _bootstrap_small_cap_rows()[:limit]
+    if point_in_time:
+        selected = [_with_universe_metadata(row, universe_date) for row in selected]
     pd.DataFrame(selected).to_csv(output_file, index=False)
     return output_file
+
+
+def _with_universe_metadata(row: dict, universe_date: str) -> dict:
+    symbol = str(row.get("symbol", ""))
+    return {
+        "symbol": symbol,
+        "name": row.get("name", ""),
+        "universe_date": universe_date,
+        "listed_date": "",
+        "delisted_date": "",
+        "valid_from": universe_date,
+        "valid_to": "",
+        "board": row.get("board") or infer_board(symbol),
+        "total_market_cap": row.get("total_market_cap", 0.0),
+        "turnover_rate": row.get("turnover_rate", 0.0),
+        "source": row.get("source", ""),
+    }
 
 
 def _fetch_eastmoney_stock_list(min_rows: int) -> List[dict]:

@@ -12,7 +12,7 @@ Use layered data rather than a single ranking signal:
 4. News and social sentiment: exchange announcements, company news, policy news, and social media text.
 5. Macro and market regime: index trend, market breadth, rates, FX, commodity prices, CPI/PPI/PMI, credit conditions.
 
-Market data, money flow, event factors, macro regime factors, buy-point evaluation, sell-point evaluation, and stress-test diagnostics now have code paths. Fundamentals and point-in-time full-market universe data still need reliable data sources before they can be trusted in research or live simulation.
+Market data, money flow, event factors, macro regime factors, buy-point evaluation, sell-point evaluation, point-in-time universe gating, walk-forward validation, and stress-test diagnostics now have code paths. Fundamentals and reliable historical point-in-time full-market universe data still need better data sources before they can be trusted in research or live simulation.
 
 ## NLP Event Factors
 
@@ -89,20 +89,26 @@ Backtests must include:
 - Fees: commission, minimum commission, stamp tax.
 - Slippage: configurable bps model, with stress cases.
 - Trading rules: lot size, T+1, no buy on limit-up, suspension no trade.
-- Survivorship-bias control: use point-in-time universe membership when available; mark current static universes as biased.
+- Survivorship-bias control: consume point-in-time universe membership when available; mark bootstrap/snapshot universes as biased until reliable historical membership exists.
 - Stress tests: higher slippage, lower liquidity, delayed execution, gap down, forced exit, market-wide selloff.
 
-The current engine already models fees, slippage, lot size, T+1, limit-price touch checks, limit-up buy blocks, limit-down sell blocks, liquidity-aware partial fills, and order rejections. The stress-test CLI reruns baseline, higher slippage, doubled costs, lower liquidity, tighter volume participation, and market-shock scenarios:
+The current engine already models fees, slippage, lot size, T+1, limit-price touch checks, limit-up buy blocks, limit-down sell blocks, liquidity-aware partial fills, point-in-time universe buy gating, capital-recycle exits, and order rejections. The stress-test CLI reruns baseline, higher slippage, doubled costs, lower liquidity, tighter volume participation, and market-shock scenarios:
 
 ```bash
 python -m aqt.cli stress-test --config configs/smallcap.yaml --output runs/stress_test
 ```
 
-It still does not have a point-in-time full-market universe. Until that exists, backtest results are engineering diagnostics, not evidence of a deployable strategy.
+Walk-forward validation freezes parameters after the training split and only evaluates the frozen choice out of sample:
+
+```bash
+python -m aqt.cli walk-forward --config configs/smallcap.yaml --output runs/walk_forward
+```
+
+It still does not have a reliable historical point-in-time full-market universe. Until that exists, backtest results are engineering diagnostics, not evidence of a deployable strategy.
 
 ## Next Implementation Steps
 
-1. Add a point-in-time universe builder with listed/delisted dates, ST date ranges, and board filters.
+1. Add a reliable historical point-in-time universe source with listed/delisted dates, ST date ranges, and board filters.
 2. Add reliable fundamentals and point-in-time financial statement factors.
 3. Connect real news/social/macro data collectors with source provenance, not hand-built placeholder files.
-4. Add walk-forward validation: train/select parameters on one period, freeze them, then evaluate only on a later out-of-sample period.
+4. Add intraday liquidity checks and broker reconciliation before live order routing.

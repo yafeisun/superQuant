@@ -71,8 +71,16 @@ class SmallCapMomentumStrategy(Strategy):
         self.target_window = config.target_window
         self.trend_window = config.trend_window
         self.risk_reward_ratio = config.risk_reward_ratio
+        self.capital_recycle_enabled = config.capital_recycle_enabled
+        self.capital_recycle_min_holding_days = config.capital_recycle_min_holding_days
+        self.capital_recycle_max_holding_days = config.capital_recycle_max_holding_days
+        self.capital_recycle_rank_multiplier = config.capital_recycle_rank_multiplier
+        self.capital_recycle_min_momentum = config.capital_recycle_min_momentum
+        self.capital_recycle_breakeven_buffer_pct = config.capital_recycle_breakeven_buffer_pct
+        self.capital_recycle_max_loss_pct = config.capital_recycle_max_loss_pct
         history_window = max(self.momentum_window, self.target_window, self.support_window, self.trend_window) + 1
         self.history: Dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=history_window))
+        self.position_entry_day: Dict[str, int] = {}
         self.day_index = 0
 
     def on_bars(self, bars: Iterable[Bar], account: Account) -> List[Order]:
@@ -81,23 +89,33 @@ class SmallCapMomentumStrategy(Strategy):
             self.history[bar.symbol].append(bar.close)
 
         self.day_index += 1
+        self._sync_position_state(account)
         bars_by_symbol = {bar.symbol: bar for bar in bar_list}
         orders = self._risk_exit_orders(account, bars_by_symbol)
         exited_symbols = {order.symbol for order in orders}
-        if self.day_index < self.momentum_window or self.day_index % self.rebalance_interval != 0:
+        recycle_orders = self._capital_recycle_orders(account, bars_by_symbol, exited_symbols)
+        orders.extend(recycle_orders)
+        exited_symbols.update(order.symbol for order in recycle_orders)
+
+        regular_rebalance = self.day_index % self.rebalance_interval == 0
+        rotation_due = bool(exited_symbols)
+        if self.day_index <= self.momentum_window or (not regular_rebalance and not rotation_due):
             return orders
 
         ranked = sorted(self._scores(bars_by_symbol), key=lambda item: item[1], reverse=True)
         selected = [symbol for symbol, score in ranked if score >= self.min_momentum][: self.top_n]
         if not selected:
-            return orders + self._sell_all(account, bars_by_symbol, "risk_off", exited_symbols)
+            if regular_rebalance:
+                return orders + self._sell_all(account, bars_by_symbol, "risk_off", exited_symbols)
+            return orders
 
         equity = account.equity()
         target_value_per_name = equity * self.target_gross_exposure / len(selected)
 
-        for symbol, position in account.positions.items():
-            if position.quantity > 0 and symbol not in selected and symbol in bars_by_symbol and symbol not in exited_symbols:
-                orders.append(Order(symbol, Side.SELL, position.quantity, bars_by_symbol[symbol].date, "rebalance_sell"))
+        if regular_rebalance:
+            for symbol, position in account.positions.items():
+                if position.quantity > 0 and symbol not in selected and symbol in bars_by_symbol and symbol not in exited_symbols:
+                    orders.append(Order(symbol, Side.SELL, position.quantity, bars_by_symbol[symbol].date, "rebalance_sell"))
 
         for symbol in selected:
             if symbol in exited_symbols:
@@ -111,10 +129,23 @@ class SmallCapMomentumStrategy(Strategy):
                 continue
             quantity = int(abs(diff_value) / bar.close)
             side = Side.BUY if diff_value > 0 else Side.SELL
+            if side == Side.SELL and not regular_rebalance:
+                continue
             reason = "rebalance_buy" if side == Side.BUY else "rebalance_trim"
             orders.append(Order(symbol, side, quantity, bar.date, reason))
 
         return orders
+
+    def _sync_position_state(self, account: Account) -> None:
+        active_symbols = set()
+        for symbol, position in account.positions.items():
+            if position.quantity <= 0:
+                continue
+            active_symbols.add(symbol)
+            self.position_entry_day.setdefault(symbol, self.day_index)
+        for symbol in list(self.position_entry_day):
+            if symbol not in active_symbols:
+                del self.position_entry_day[symbol]
 
     def _risk_exit_orders(self, account: Account, bars_by_symbol: Dict[str, Bar]) -> List[Order]:
         orders: List[Order] = []
@@ -135,6 +166,66 @@ class SmallCapMomentumStrategy(Strategy):
             elif bar.close >= upside_target_level and trend_slope <= 0:
                 orders.append(Order(symbol, Side.SELL, position.quantity, bar.date, "target_reached_trend_fade"))
         return orders
+
+    def _capital_recycle_orders(
+        self,
+        account: Account,
+        bars_by_symbol: Dict[str, Bar],
+        excluded_symbols: set[str],
+    ) -> List[Order]:
+        if not self.capital_recycle_enabled:
+            return []
+        scores = sorted(self._scores(bars_by_symbol), key=lambda item: item[1], reverse=True)
+        if not scores:
+            return []
+        score_by_symbol = dict(scores)
+        rank_by_symbol = {symbol: rank for rank, (symbol, _) in enumerate(scores, start=1)}
+        weak_rank_limit = max(self.top_n * max(self.capital_recycle_rank_multiplier, 1), self.top_n + 1)
+
+        orders: List[Order] = []
+        for symbol, position in account.positions.items():
+            if (
+                position.quantity <= 0
+                or position.avg_cost <= 0
+                or symbol not in bars_by_symbol
+                or symbol in excluded_symbols
+            ):
+                continue
+            entry_day = self.position_entry_day.get(symbol, self.day_index)
+            holding_days = max(self.day_index - entry_day, 0)
+            if holding_days < self.capital_recycle_min_holding_days:
+                continue
+
+            rank = rank_by_symbol.get(symbol)
+            momentum = score_by_symbol.get(symbol)
+            weak_rank = rank is None or rank > weak_rank_limit
+            weak_momentum = momentum is None or momentum < self.capital_recycle_min_momentum
+            if not (weak_rank or weak_momentum):
+                continue
+
+            bar = bars_by_symbol[symbol]
+            return_pct = bar.close / position.avg_cost - 1.0
+            reason = self._capital_recycle_reason(symbol, holding_days, return_pct, bar)
+            if reason:
+                orders.append(Order(symbol, Side.SELL, position.quantity, bar.date, reason))
+        return orders
+
+    def _capital_recycle_reason(self, symbol: str, holding_days: int, return_pct: float, bar: Bar) -> str | None:
+        if return_pct >= self.capital_recycle_breakeven_buffer_pct:
+            return "capital_recycle_breakeven"
+        if holding_days < self.capital_recycle_max_holding_days:
+            return None
+        if return_pct >= self.capital_recycle_max_loss_pct:
+            return "capital_recycle_stale"
+
+        levels = self._technical_levels(symbol)
+        if not levels:
+            return None
+        _, _, trend_slope = levels
+        close_is_falling = bar.previous_close is not None and bar.close < bar.previous_close
+        if trend_slope < 0 and close_is_falling:
+            return "capital_recycle_damage_control"
+        return None
 
     def _technical_levels(self, symbol: str) -> tuple[float, float, float] | None:
         closes = list(self.history[symbol])

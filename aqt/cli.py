@@ -19,6 +19,7 @@ from .optimize import optimize_small_cap_strategy
 from .selection import build_selection_candidates
 from .signals import generate_daily_signal
 from .stress import run_stress_test
+from .walk_forward import run_walk_forward
 
 
 DEFAULT_CONFIG = "configs/demo.yaml"
@@ -55,6 +56,8 @@ def main() -> None:
     universe.add_argument("--limit", type=int, default=30)
     universe.add_argument("--min-market-cap", type=float, default=2_000_000_000)
     universe.add_argument("--max-market-cap", type=float, default=12_000_000_000)
+    universe.add_argument("--point-in-time", action="store_true", help="write snapshot metadata columns for PIT universe gating")
+    universe.add_argument("--as-of", default=None, help="YYYY-MM-DD snapshot date for --point-in-time")
 
     backtest = subparsers.add_parser("backtest", help="run event-driven backtest")
     backtest.add_argument("--config", default=DEFAULT_CONFIG)
@@ -73,6 +76,17 @@ def main() -> None:
     optimize.add_argument("--momentum-windows", default="40,60,90")
     optimize.add_argument("--rebalance-intervals", default="10,20,30")
     optimize.add_argument("--top-ns", default="5,8,10")
+
+    walk_forward = subparsers.add_parser("walk-forward", help="optimize on train split and validate frozen params out of sample")
+    walk_forward.add_argument("--config", default="configs/smallcap.yaml")
+    walk_forward.add_argument("--output", default="runs/walk_forward")
+    walk_forward.add_argument("--train-start", default="2021-01-04")
+    walk_forward.add_argument("--train-end", default="2024-12-31")
+    walk_forward.add_argument("--test-start", default="2025-01-02")
+    walk_forward.add_argument("--test-end", default=None, help="defaults to config data.end")
+    walk_forward.add_argument("--momentum-windows", default="40,60,90")
+    walk_forward.add_argument("--rebalance-intervals", default="10,20,30")
+    walk_forward.add_argument("--top-ns", default="3,5,8")
 
     report = subparsers.add_parser("report", help="print summary metrics from a run directory")
     report.add_argument("--run-dir", default="runs/smallcap_backtest")
@@ -112,6 +126,8 @@ def main() -> None:
                 args.limit,
                 args.min_market_cap,
                 args.max_market_cap,
+                args.point_in_time,
+                args.as_of,
             )
             print(path)
             return
@@ -193,6 +209,19 @@ def main() -> None:
                 _parse_ints(args.top_ns),
             )
             print(path)
+        elif args.command == "walk-forward":
+            paths = run_walk_forward(
+                config,
+                Path(args.output),
+                args.train_start,
+                args.train_end,
+                args.test_start,
+                args.test_end or config.data.end,
+                _parse_ints(args.momentum_windows),
+                _parse_ints(args.rebalance_intervals),
+                _parse_ints(args.top_ns),
+            )
+            _print_paths(paths)
         elif args.command == "daily-signal":
             paths = generate_daily_signal(config, Path(args.output))
             _print_paths(paths)
