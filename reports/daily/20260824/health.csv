@@ -1,0 +1,5 @@
+symbol,name,generated_at,latest,pct_chg,turnover_rate,pe,amount,total_market_cap,float_market_cap,is_st,is_suspended,is_limit_up,is_limit_down,block_reasons,tradable,health_score
+002871.SZ,伟隆股份,2026-08-25T08:57:13,16.81,2.5,2.05,46.94,50765949.0,4233663134.45,2509171932.6299996,False,False,False,False,,True,92.0
+002875.SZ,安奈儿,2026-08-25T08:57:13,13.12,2.02,1.92,46.4,52682975.0,2786827334.3999996,2786827334.3999996,False,False,False,False,,True,92.0
+002903.SZ,宇环数控,2026-08-25T08:57:13,31.04,-5.02,18.31,-139.71,615503351.38,4831732960.0,3338847056.96,False,False,False,False,pe_out_of_range,False,85.0
+002896.SZ,中大力德,2026-08-25T08:57:13,64.75,0.62,4.06,287.58,514909014.39,12724842882.5,12724842882.5,False,False,False,False,pe_out_of_range,False,85.0
