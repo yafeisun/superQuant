@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-26T09:02:35",
+  "generated_at": "2026-08-27T19:05:41",
   "job": "after_close",
   "status": "no_eligible_symbols",
   "severity": "warning",
-  "trading_day": "2026-08-26",
+  "trading_day": "2026-08-28",
   "message": "health filters removed all symbols",
   "details": {
-    "output_dir": "reports/daily/20260826",
+    "output_dir": "reports/daily/20260828",
     "health_rows": 0
   }
 }
