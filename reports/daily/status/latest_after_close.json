@@ -1,9 +1,12 @@
 {
-  "generated_at": "2026-08-28T20:11:00",
+  "generated_at": "2026-08-31T16:10:44",
   "job": "after_close",
-  "status": "skipped_non_trading_day",
+  "status": "ok",
   "severity": "info",
-  "trading_day": "2026-08-29",
-  "message": "target date is not an A-share trading day",
-  "details": {}
+  "trading_day": "2026-08-31",
+  "message": "after-close selection completed",
+  "details": {
+    "output_dir": "reports/daily/20260831",
+    "eligible_symbols": 1
+  }
 }

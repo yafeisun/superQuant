@@ -1,0 +1,13 @@
+signal_date: 2026-08-31
+trading_day_index: 640
+equity: 1000000.00
+cash: 1000000.00
+rebalance_day: True
+next_rebalance_in_trading_days: 0
+planned_orders: 0
+
+selected_by_momentum:
+  1. 002871.SZ momentum=-12.25% close=18.56
+
+order_plan:
+  HOLD
