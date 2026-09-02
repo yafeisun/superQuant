@@ -1,9 +1,9 @@
 signal_date: 2026-09-01
-trading_day_index: 1373
+trading_day_index: 640
 equity: 1000000.00
 cash: 1000000.00
-rebalance_day: False
-next_rebalance_in_trading_days: 7
+rebalance_day: True
+next_rebalance_in_trading_days: 0
 planned_orders: 0
 
 selected_by_momentum:
