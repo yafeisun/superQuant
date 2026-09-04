@@ -1,0 +1,4 @@
+job_type: after_close
+config: configs/smallcap_best.yaml
+signal_date: 2026-09-04
+generated_at: 2026-09-04T12:45:21
