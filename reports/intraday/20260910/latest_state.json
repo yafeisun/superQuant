@@ -1,36 +1,23 @@
 {
   "allowed_orders": [],
-  "blocked_orders": [
-    {
-      "decision": "BLOCK",
-      "estimated_cost": 273.77,
-      "estimated_price": 24.5974,
-      "estimated_value": 912562.69,
-      "quantity": 37100,
-      "reason": "order_value_limit",
-      "reference_close": 24.59,
-      "side": "BUY",
-      "strategy_reason": "rebalance_buy",
-      "symbol": "603679.SH"
-    }
-  ],
-  "cash": "1074555.44",
-  "equity": "1074555.44",
-  "fingerprint": "0e49bcae8b2df7327e444422ed801a1943db4414149cc37a19e88ddb119fddb1",
+  "blocked_orders": [],
+  "cash": "1086412.03",
+  "equity": "1086412.03",
+  "fingerprint": "6b57d20b509738d645bc39b84a86a67ebf008f9a241d786179f6e276165ac1f1",
   "metrics": {
-    "max_drawdown": -0.326011,
-    "total_cost": 34518.0327,
-    "total_return": 0.074555,
-    "win_rate": 0.405
+    "max_drawdown": -0.317448,
+    "total_cost": 34871.3064,
+    "total_return": 0.086412,
+    "win_rate": 0.402985
   },
   "next_rebalance_in_trading_days": "0",
-  "planned_orders": "1",
+  "planned_orders": "0",
   "positions": [],
   "rebalance_day": "True",
   "selected_symbols": [
     "002909.SZ",
-    "003023.SZ",
     "603679.SH",
+    "003023.SZ",
     "603721.SH",
     "002915.SZ",
     "003016.SZ",
@@ -40,7 +27,7 @@
     "003017.SZ"
   ],
   "signal_date": "2026-09-10",
-  "updated_at": "2026-09-10T14:47:56+08:00",
+  "updated_at": "2026-09-10T15:56:03+08:00",
   "watch_symbols": [
     "002909.SZ",
     "002915.SZ",
