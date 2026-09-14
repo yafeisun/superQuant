@@ -1,0 +1,4 @@
+symbol,name,generated_at,latest,pct_chg,turnover_rate,pe,amount,total_market_cap,float_market_cap,is_st,is_suspended,is_limit_up,is_limit_down,block_reasons,tradable,health_score
+002871.SZ,伟隆股份,2026-09-14T14:59:54,17.39,-1.42,1.91,44.47,49801011.63,4379738364.55,2598301164.9700003,False,False,False,False,,True,92.0
+002896.SZ,中大力德,2026-09-14T14:59:54,60.57,-3.3,1.93,214.23,231532892.99,11903378121.9,11903378121.9,False,False,False,False,pe_out_of_range,False,85.0
+002875.SZ,安奈儿,2026-09-14T14:59:54,13.06,-1.43,1.62,-339.15,45083094.33,2774082697.2000003,2774082697.2000003,False,False,False,False,pe_out_of_range,False,77.0
