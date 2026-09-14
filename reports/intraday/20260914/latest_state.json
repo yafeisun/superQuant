@@ -3,7 +3,7 @@
   "blocked_orders": [],
   "cash": "413098.87",
   "equity": "1324043.87",
-  "fingerprint": "fe38c93de4c56bb7f6f8af9c14722b7fb209996c03a5b27898b92eac11d7e0b6",
+  "fingerprint": "1b7390953c81b5788109328a2c40191799caa59286e158fa0f0d375bf98cb5f9",
   "metrics": {
     "max_drawdown": -0.259228,
     "total_cost": 43726.1724,
@@ -61,14 +61,14 @@
     "003023.SZ",
     "603721.SH",
     "003018.SZ",
-    "002875.SZ",
     "002871.SZ",
+    "002875.SZ",
     "603655.SH",
     "003016.SZ",
     "003015.SZ"
   ],
   "signal_date": "2026-09-14",
-  "updated_at": "2026-09-14T15:19:34+08:00",
+  "updated_at": "2026-09-14T16:37:51+08:00",
   "watch_symbols": [
     "002871.SZ",
     "002875.SZ",
