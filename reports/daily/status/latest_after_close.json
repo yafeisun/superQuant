@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-18T12:58:59",
+  "generated_at": "2026-09-21T15:08:32",
   "job": "after_close",
   "status": "ok",
   "severity": "info",
-  "trading_day": "2026-09-18",
+  "trading_day": "2026-09-21",
   "message": "after-close selection completed",
   "details": {
-    "output_dir": "reports/daily/20260918",
+    "output_dir": "reports/daily/20260921",
     "eligible_symbols": 1
   }
 }
