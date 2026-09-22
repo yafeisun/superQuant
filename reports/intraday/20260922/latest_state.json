@@ -1,57 +1,57 @@
 {
   "allowed_orders": [],
   "blocked_orders": [],
-  "cash": "416696.07",
-  "equity": "1360962.07",
-  "fingerprint": "b97a9d7fdf389cd8a3d424bd65ca8bd8c5cf6816903afe80f2486edfbcfffe0e",
+  "cash": "280457.87",
+  "equity": "909531.87",
+  "fingerprint": "0a4fa0f961ce78673b8cb34b2a6e1df74aad0fe1cf0f1386d698a971501cd505",
   "metrics": {
-    "max_drawdown": -0.293231,
-    "total_cost": 44253.5051,
-    "total_return": 0.360962,
-    "win_rate": 0.427885
+    "max_drawdown": -0.595787,
+    "total_cost": 59934.0871,
+    "total_return": -0.090468,
+    "win_rate": 0.363897
   },
   "next_rebalance_in_trading_days": "12",
   "planned_orders": "0",
   "positions": [
     {
-      "available_to_sell": 9500,
+      "available_to_sell": 20300,
+      "avg_cost": 8.2571,
+      "date": "2026-09-22",
+      "last_price": 6.85,
+      "market_value": 139055.0,
+      "quantity": 20300,
+      "symbol": "002909.SZ",
+      "unrealized_pnl": -28563.27
+    },
+    {
+      "available_to_sell": 6300,
       "avg_cost": 24.5073,
       "date": "2026-09-22",
       "last_price": 26.76,
-      "market_value": 254220.0,
-      "quantity": 9500,
+      "market_value": 168588.0,
+      "quantity": 6300,
       "symbol": "603679.SH",
-      "unrealized_pnl": 21400.18
+      "unrealized_pnl": 14191.7
     },
     {
-      "available_to_sell": 21400,
+      "available_to_sell": 14300,
       "avg_cost": 10.6432,
       "date": "2026-09-22",
       "last_price": 11.37,
-      "market_value": 243318.0,
-      "quantity": 21400,
+      "market_value": 162591.0,
+      "quantity": 14300,
       "symbol": "002923.SZ",
-      "unrealized_pnl": 15553.69
+      "unrealized_pnl": 10393.35
     },
     {
-      "available_to_sell": 31300,
+      "available_to_sell": 20900,
       "avg_cost": 7.4522,
       "date": "2026-09-22",
       "last_price": 7.6,
-      "market_value": 237880.0,
-      "quantity": 31300,
+      "market_value": 158840.0,
+      "quantity": 20900,
       "symbol": "003016.SZ",
-      "unrealized_pnl": 4625.04
-    },
-    {
-      "available_to_sell": 30400,
-      "avg_cost": 8.257,
-      "date": "2026-09-22",
-      "last_price": 6.87,
-      "market_value": 208848.0,
-      "quantity": 30400,
-      "symbol": "002909.SZ",
-      "unrealized_pnl": -42163.28
+      "unrealized_pnl": 3088.29
     }
   ],
   "rebalance_day": "False",
@@ -68,7 +68,7 @@
     "002871.SZ"
   ],
   "signal_date": "2026-09-22",
-  "updated_at": "2026-09-22T17:40:11+08:00",
+  "updated_at": "2026-09-22T20:24:47+08:00",
   "watch_symbols": [
     "002871.SZ",
     "002903.SZ",
