@@ -30,3 +30,4 @@
 {"generated_at": "2026-10-05T17:06:07", "job": "after_close", "status": "skipped_non_trading_day", "severity": "info", "trading_day": "2026-10-06", "message": "target date is not an A-share trading day", "details": {}}
 {"generated_at": "2026-10-06T15:06:10", "job": "after_close", "status": "skipped_non_trading_day", "severity": "info", "trading_day": "2026-10-06", "message": "target date is not an A-share trading day", "details": {}}
 {"generated_at": "2026-10-07T15:33:24", "job": "after_close", "status": "skipped_non_trading_day", "severity": "info", "trading_day": "2026-10-07", "message": "target date is not an A-share trading day", "details": {}}
+{"generated_at": "2026-10-08T15:35:32", "job": "after_close", "status": "no_eligible_symbols", "severity": "warning", "trading_day": "2026-10-08", "message": "health filters removed all symbols", "details": {"output_dir": "reports/daily/20261008", "health_rows": 0}}
