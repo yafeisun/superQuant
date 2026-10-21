@@ -1,0 +1,110 @@
+{
+  "allowed_orders": [
+    {
+      "decision": "ALLOW",
+      "estimated_cost": 109.83,
+      "estimated_price": 22.2333,
+      "estimated_value": 84486.65,
+      "quantity": 3800,
+      "reason": "sell_allowed",
+      "reference_close": 22.24,
+      "side": "SELL",
+      "strategy_reason": "support_break_trend_down",
+      "symbol": "003023.SZ"
+    },
+    {
+      "decision": "ALLOW",
+      "estimated_cost": 26.64,
+      "estimated_price": 6.0418,
+      "estimated_value": 88814.64,
+      "quantity": 14700,
+      "reason": "buy_allowed",
+      "reference_close": 6.04,
+      "side": "BUY",
+      "strategy_reason": "rebalance_buy",
+      "symbol": "002909.SZ"
+    }
+  ],
+  "blocked_orders": [],
+  "cash": "175391.98",
+  "equity": "524137.98",
+  "fingerprint": "813921948bb6f7afe28a4a33f4a31dc368a6827ad0a6056d36d89c0095511954",
+  "metrics": {
+    "max_drawdown": -0.704476,
+    "total_cost": 65313.405,
+    "total_return": -0.476025,
+    "win_rate": 0.372768
+  },
+  "next_rebalance_in_trading_days": "17",
+  "planned_orders": "2",
+  "positions": [
+    {
+      "available_to_sell": 4600,
+      "avg_cost": 19.916,
+      "date": "2026-10-21",
+      "last_price": 19.29,
+      "market_value": 88734.0,
+      "quantity": 4600,
+      "symbol": "603721.SH",
+      "unrealized_pnl": -2879.48
+    },
+    {
+      "available_to_sell": 7200,
+      "avg_cost": 12.4737,
+      "date": "2026-10-21",
+      "last_price": 11.65,
+      "market_value": 83880.0,
+      "quantity": 7200,
+      "symbol": "002917.SZ",
+      "unrealized_pnl": -5930.94
+    },
+    {
+      "available_to_sell": 4500,
+      "avg_cost": 20.106,
+      "date": "2026-10-21",
+      "last_price": 20.36,
+      "market_value": 91620.0,
+      "quantity": 4500,
+      "symbol": "603679.SH",
+      "unrealized_pnl": 1142.86
+    },
+    {
+      "available_to_sell": 3800,
+      "avg_cost": 23.217,
+      "date": "2026-10-21",
+      "last_price": 22.24,
+      "market_value": 84512.0,
+      "quantity": 3800,
+      "symbol": "003023.SZ",
+      "unrealized_pnl": -3712.46
+    }
+  ],
+  "rebalance_day": "False",
+  "selected_symbols": [
+    "002909.SZ",
+    "002917.SZ",
+    "603721.SH",
+    "003016.SZ",
+    "003017.SZ",
+    "003025.SZ",
+    "003015.SZ",
+    "002875.SZ",
+    "002871.SZ",
+    "603679.SH"
+  ],
+  "signal_date": "2026-10-21",
+  "updated_at": "2026-10-21T14:10:51+08:00",
+  "watch_symbols": [
+    "002871.SZ",
+    "002875.SZ",
+    "002909.SZ",
+    "002917.SZ",
+    "003015.SZ",
+    "003016.SZ",
+    "003017.SZ",
+    "003023.SZ",
+    "003025.SZ",
+    "603679.SH",
+    "603721.SH"
+  ]
+}
