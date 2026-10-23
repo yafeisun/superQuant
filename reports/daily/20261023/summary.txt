@@ -1,0 +1,13 @@
+signal_date: 2026-10-23
+trading_day_index: 640
+equity: 1000000.00
+cash: 1000000.00
+rebalance_day: True
+next_rebalance_in_trading_days: 0
+planned_orders: 1
+
+selected_by_momentum:
+  1. 002871.SZ momentum=-5.77% close=15.52
+
+order_plan:
+  BUY 002871.SZ qty=54700 value=849198.68 decision=BLOCK reason=order_value_limit

@@ -1,0 +1,2 @@
+symbol,side,quantity,reference_close,estimated_price,estimated_value,estimated_cost,decision,reason,strategy_reason
+002871.SZ,BUY,54700,15.52,15.5247,849198.68,254.76,BLOCK,order_value_limit,rebalance_buy
