@@ -1,0 +1,95 @@
+{
+  "allowed_orders": [],
+  "blocked_orders": [],
+  "cash": "152620.79",
+  "equity": "1114830.79",
+  "fingerprint": "64235adeb6f594c3784f85a561b63a3395861a747874c49d34492fa35fa8835d",
+  "metrics": {
+    "max_drawdown": -0.351929,
+    "total_cost": 45546.5768,
+    "total_return": 0.114831,
+    "win_rate": 0.392523
+  },
+  "next_rebalance_in_trading_days": "10",
+  "planned_orders": "0",
+  "positions": [
+    {
+      "available_to_sell": 17400,
+      "avg_cost": 12.4123,
+      "date": "2026-10-30",
+      "last_price": 10.48,
+      "market_value": 182352.0,
+      "quantity": 17400,
+      "symbol": "002917.SZ",
+      "unrealized_pnl": -33622.77
+    },
+    {
+      "available_to_sell": 5500,
+      "avg_cost": 34.3003,
+      "date": "2026-10-30",
+      "last_price": 34.29,
+      "market_value": 188595.0,
+      "quantity": 5500,
+      "symbol": "003018.SZ",
+      "unrealized_pnl": -56.58
+    },
+    {
+      "available_to_sell": 16300,
+      "avg_cost": 11.6335,
+      "date": "2026-10-30",
+      "last_price": 11.57,
+      "market_value": 188591.0,
+      "quantity": 16300,
+      "symbol": "003015.SZ",
+      "unrealized_pnl": -1034.87
+    },
+    {
+      "available_to_sell": 10500,
+      "avg_cost": 19.916,
+      "date": "2026-10-30",
+      "last_price": 20.32,
+      "market_value": 213360.0,
+      "quantity": 10500,
+      "symbol": "603721.SH",
+      "unrealized_pnl": 4242.28
+    },
+    {
+      "available_to_sell": 34800,
+      "avg_cost": 5.4416,
+      "date": "2026-10-30",
+      "last_price": 5.44,
+      "market_value": 189312.0,
+      "quantity": 34800,
+      "symbol": "002909.SZ",
+      "unrealized_pnl": -56.79
+    }
+  ],
+  "rebalance_day": "False",
+  "selected_symbols": [
+    "603721.SH",
+    "002909.SZ",
+    "002917.SZ",
+    "003015.SZ",
+    "002915.SZ",
+    "003025.SZ",
+    "003016.SZ",
+    "003017.SZ",
+    "002896.SZ",
+    "002875.SZ"
+  ],
+  "signal_date": "2026-10-30",
+  "updated_at": "2026-10-30T15:23:00+08:00",
+  "watch_symbols": [
+    "002875.SZ",
+    "002896.SZ",
+    "002909.SZ",
+    "002915.SZ",
+    "002917.SZ",
+    "003015.SZ",
+    "003016.SZ",
+    "003017.SZ",
+    "003018.SZ",
+    "003025.SZ",
+    "603721.SH"
+  ]
+}
