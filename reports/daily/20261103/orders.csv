@@ -1,0 +1,6 @@
+symbol,side,quantity,reference_close,estimated_price,estimated_value,estimated_cost,decision,reason,strategy_reason
+003018.SZ,SELL,5600,30.65,30.6408,171588.51,223.07,ALLOW,sell_allowed,support_break_trend_down
+603655.SH,SELL,7600,24.03,24.0228,182573.21,237.35,ALLOW,sell_allowed,support_break_trend_down
+003025.SZ,SELL,16900,11.31,11.3066,191081.66,248.41,ALLOW,sell_allowed,support_break_trend_down
+003017.SZ,BUY,11400,22.55,22.5568,257147.12,77.14,BLOCK,order_value_limit,rebalance_buy
+003015.SZ,BUY,41000,11.23,11.2334,460568.13,138.17,BLOCK,order_value_limit,rebalance_buy

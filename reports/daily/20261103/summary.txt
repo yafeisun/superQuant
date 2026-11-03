@@ -1,0 +1,21 @@
+signal_date: 2026-11-03
+trading_day_index: 1412
+equity: 1084989.85
+cash: 336632.85
+rebalance_day: False
+next_rebalance_in_trading_days: 8
+planned_orders: 5
+
+selected_by_momentum:
+  1. 003017.SZ momentum=-1.70% close=22.55
+  2. 002917.SZ momentum=-7.06% close=9.74
+  3. 003016.SZ momentum=-8.56% close=6.52
+  4. 003015.SZ momentum=-9.51% close=11.23
+  5. 003025.SZ momentum=-9.74% close=11.31
+
+order_plan:
+  SELL 003018.SZ qty=5600 value=171588.51 decision=ALLOW reason=sell_allowed
+  SELL 603655.SH qty=7600 value=182573.21 decision=ALLOW reason=sell_allowed
+  SELL 003025.SZ qty=16900 value=191081.66 decision=ALLOW reason=sell_allowed
+  BUY 003017.SZ qty=11400 value=257147.12 decision=BLOCK reason=order_value_limit
+  BUY 003015.SZ qty=41000 value=460568.13 decision=BLOCK reason=order_value_limit
