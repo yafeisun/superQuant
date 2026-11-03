@@ -1,63 +1,63 @@
 {
   "allowed_orders": [],
   "blocked_orders": [],
-  "cash": "311897.17",
-  "equity": "485998.17",
-  "fingerprint": "d4fd0d17b8d466054aa18395b089af8021728552c7c30f76ade5f7837a27f606",
+  "cash": "552986.07",
+  "equity": "860826.07",
+  "fingerprint": "b34e106f4bb0ac406c4f8eb45cba9e001b1e95e1a539892571a27e82ada415d8",
   "metrics": {
-    "max_drawdown": -0.704476,
-    "total_cost": 66586.0677,
-    "total_return": -0.514002,
-    "win_rate": 0.364629
+    "max_drawdown": -0.379095,
+    "total_cost": 44694.9851,
+    "total_return": -0.139174,
+    "win_rate": 0.321839
   },
   "next_rebalance_in_trading_days": "8",
   "planned_orders": "0",
   "positions": [
     {
-      "available_to_sell": 4600,
+      "available_to_sell": 8300,
       "avg_cost": 19.916,
       "date": "2026-11-03",
-      "last_price": 19.71,
-      "market_value": 90666.0,
-      "quantity": 4600,
+      "last_price": 20.12,
+      "market_value": 166996.0,
+      "quantity": 8300,
       "symbol": "603721.SH",
-      "unrealized_pnl": -947.48
+      "unrealized_pnl": 1693.42
     },
     {
-      "available_to_sell": 3700,
+      "available_to_sell": 6600,
       "avg_cost": 21.8966,
       "date": "2026-11-03",
-      "last_price": 22.55,
-      "market_value": 83435.0,
-      "quantity": 3700,
+      "last_price": 21.34,
+      "market_value": 140844.0,
+      "quantity": 6600,
       "symbol": "003017.SZ",
-      "unrealized_pnl": 2417.7
+      "unrealized_pnl": -3673.34
     }
   ],
   "rebalance_day": "False",
   "selected_symbols": [
     "603721.SH",
-    "003017.SZ",
-    "002917.SZ",
-    "003016.SZ",
-    "003015.SZ",
-    "003025.SZ",
     "002909.SZ",
+    "002917.SZ",
+    "003015.SZ",
+    "003017.SZ",
+    "003025.SZ",
+    "003016.SZ",
     "002896.SZ",
-    "002915.SZ",
-    "003020.SZ"
+    "002923.SZ",
+    "002922.SZ"
   ],
   "signal_date": "2026-11-03",
-  "updated_at": "2026-11-03T20:39:44+08:00",
+  "updated_at": "2026-11-03T22:53:57+08:00",
   "watch_symbols": [
     "002896.SZ",
     "002909.SZ",
-    "002915.SZ",
     "002917.SZ",
+    "002922.SZ",
+    "002923.SZ",
     "003015.SZ",
     "003016.SZ",
     "003017.SZ",
-    "003020.SZ",
     "003025.SZ",
     "603721.SH"
   ]
