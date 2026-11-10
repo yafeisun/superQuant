@@ -1,2 +1,3 @@
 time,signal_date,rebalance_day,next_rebalance_in_trading_days,equity,cash,positions,planned_orders,allow_orders,block_orders,order_symbols,watch_symbols,total_return,max_drawdown,win_rate,total_cost
 0111,2026-11-09,False,4,487957.17,311897.17,2,0,0,0,,002896.SZ;002903.SZ;002917.SZ;002922.SZ;003015.SZ;003016.SZ;003017.SZ;003023.SZ;003025.SZ;603721.SH,-0.512043,-0.704476,0.364629,66586.0677
+1631,2026-11-10,False,3,496152.17,311897.17,2,0,0,0,,002896.SZ;002903.SZ;002915.SZ;002917.SZ;003015.SZ;003016.SZ;003017.SZ;003023.SZ;003025.SZ;603721.SH,-0.503848,-0.704476,0.364629,66586.0677
