@@ -1,4 +1,4 @@
-job_type: after_close_no_eligible_symbols
+job_type: after_close
 config: configs/smallcap_best.yaml
 signal_date: 2026-11-12
-generated_at: 2026-11-11T16:09:05
+generated_at: 2026-11-12T16:48:09

@@ -1,2 +1,2 @@
-status
-no_eligible_symbols
+status,start_date,end_date,start_equity,end_equity,total_return,max_drawdown,fills,closed_trades,winning_trades,win_rate,total_cost,rejections
+ok,2021-01-04,2026-11-12,1000000.0,1491088.22,0.491088,-0.292787,367,222,83,0.373874,48501.6189,165
