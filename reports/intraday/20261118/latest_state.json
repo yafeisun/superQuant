@@ -1,0 +1,90 @@
+{
+  "allowed_orders": [
+    {
+      "decision": "ALLOW",
+      "estimated_cost": 99.44,
+      "estimated_price": 20.6738,
+      "estimated_value": 76493.05,
+      "quantity": 3700,
+      "reason": "sell_allowed",
+      "reference_close": 20.68,
+      "side": "SELL",
+      "strategy_reason": "support_break_trend_down",
+      "symbol": "003017.SZ"
+    }
+  ],
+  "blocked_orders": [
+    {
+      "decision": "BLOCK",
+      "estimated_cost": 121.46,
+      "estimated_price": 5.4416,
+      "estimated_value": 404857.42,
+      "quantity": 74400,
+      "reason": "order_value_limit",
+      "reference_close": 5.44,
+      "side": "BUY",
+      "strategy_reason": "rebalance_buy",
+      "symbol": "002909.SZ"
+    }
+  ],
+  "cash": "311897.17",
+  "equity": "476227.17",
+  "fingerprint": "2af6d9fdba70dbadab94fd2993fb1d5d41480e5477e56c5d05ce811b04d07458",
+  "metrics": {
+    "max_drawdown": -0.704476,
+    "total_cost": 66685.5087,
+    "total_return": -0.523895,
+    "win_rate": 0.363834
+  },
+  "next_rebalance_in_trading_days": "18",
+  "planned_orders": "2",
+  "positions": [
+    {
+      "available_to_sell": 4600,
+      "avg_cost": 19.916,
+      "date": "2026-11-17",
+      "last_price": 19.09,
+      "market_value": 87814.0,
+      "quantity": 4600,
+      "symbol": "603721.SH",
+      "unrealized_pnl": -3799.48
+    },
+    {
+      "available_to_sell": 3700,
+      "avg_cost": 21.8966,
+      "date": "2026-11-17",
+      "last_price": 20.68,
+      "market_value": 76516.0,
+      "quantity": 3700,
+      "symbol": "003017.SZ",
+      "unrealized_pnl": -4501.3
+    }
+  ],
+  "rebalance_day": "False",
+  "selected_symbols": [
+    "603721.SH",
+    "003015.SZ",
+    "003017.SZ",
+    "003025.SZ",
+    "002896.SZ",
+    "002917.SZ",
+    "002922.SZ",
+    "003016.SZ",
+    "003020.SZ",
+    "002903.SZ"
+  ],
+  "signal_date": "2026-11-17",
+  "updated_at": "2026-11-18T00:44:48+08:00",
+  "watch_symbols": [
+    "002896.SZ",
+    "002903.SZ",
+    "002917.SZ",
+    "002922.SZ",
+    "003015.SZ",
+    "003016.SZ",
+    "003017.SZ",
+    "003020.SZ",
+    "003025.SZ",
+    "603721.SH"
+  ]
+}
