@@ -1,0 +1,17 @@
+signal_date: 2026-11-17
+trading_day_index: 1422
+equity: 1306003.59
+cash: 1306003.59
+rebalance_day: False
+next_rebalance_in_trading_days: 18
+planned_orders: 0
+
+selected_by_momentum:
+  1. 003015.SZ momentum=-2.15% close=11.81
+  2. 003017.SZ momentum=-4.52% close=20.68
+  3. 003025.SZ momentum=-7.08% close=11.02
+  4. 002917.SZ momentum=-10.01% close=9.17
+  5. 002922.SZ momentum=-11.56% close=20.2
+
+order_plan:
+  HOLD
