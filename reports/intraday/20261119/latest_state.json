@@ -1,0 +1,80 @@
+{
+  "allowed_orders": [
+    {
+      "decision": "ALLOW",
+      "estimated_cost": 191.59,
+      "estimated_price": 18.1945,
+      "estimated_value": 147375.77,
+      "quantity": 8100,
+      "reason": "sell_allowed",
+      "reference_close": 18.2,
+      "side": "SELL",
+      "strategy_reason": "support_break_trend_down",
+      "symbol": "603721.SH"
+    }
+  ],
+  "blocked_orders": [
+    {
+      "decision": "BLOCK",
+      "estimated_cost": 209.19,
+      "estimated_price": 5.3516,
+      "estimated_value": 697314.13,
+      "quantity": 130300,
+      "reason": "order_value_limit",
+      "reference_close": 5.35,
+      "side": "BUY",
+      "strategy_reason": "rebalance_buy",
+      "symbol": "002909.SZ"
+    }
+  ],
+  "cash": "673021.87",
+  "equity": "820441.87",
+  "fingerprint": "2d4ce283deb44159450b82d04cbdfcb3e9f0c861aae664c2a735a17f13b5fbff",
+  "metrics": {
+    "max_drawdown": -0.59258,
+    "total_cost": 72806.6879,
+    "total_return": -0.179794,
+    "win_rate": 0.346835
+  },
+  "next_rebalance_in_trading_days": "17",
+  "planned_orders": "2",
+  "positions": [
+    {
+      "available_to_sell": 8100,
+      "avg_cost": 19.916,
+      "date": "2026-11-18",
+      "last_price": 18.2,
+      "market_value": 147420.0,
+      "quantity": 8100,
+      "symbol": "603721.SH",
+      "unrealized_pnl": -13899.38
+    }
+  ],
+  "rebalance_day": "False",
+  "selected_symbols": [
+    "603721.SH",
+    "003015.SZ",
+    "003017.SZ",
+    "003025.SZ",
+    "002917.SZ",
+    "003016.SZ",
+    "002896.SZ",
+    "002922.SZ",
+    "003020.SZ",
+    "002903.SZ"
+  ],
+  "signal_date": "2026-11-18",
+  "updated_at": "2026-11-19T00:14:24+08:00",
+  "watch_symbols": [
+    "002896.SZ",
+    "002903.SZ",
+    "002917.SZ",
+    "002922.SZ",
+    "003015.SZ",
+    "003016.SZ",
+    "003017.SZ",
+    "003020.SZ",
+    "003025.SZ",
+    "603721.SH"
+  ]
+}
