@@ -1,42 +1,42 @@
 {
   "allowed_orders": [],
   "blocked_orders": [],
-  "cash": "854495.33",
-  "equity": "854495.33",
-  "fingerprint": "fdfcc9b7552e8bbfe5dc43cbde1d25156f78b1f79cc9c6e0c9dfaf6012fb43c2",
+  "cash": "471876.86",
+  "equity": "471876.86",
+  "fingerprint": "6f55dcf00b899935c88e312d6b17a4d3908b8e86a601b2fda66b7fc765faefb4",
   "metrics": {
-    "max_drawdown": -0.47715,
-    "total_cost": 66762.4648,
-    "total_return": -0.145505,
-    "win_rate": 0.322314
+    "max_drawdown": -0.704476,
+    "total_cost": 66794.312,
+    "total_return": -0.528123,
+    "win_rate": 0.363043
   },
   "next_rebalance_in_trading_days": "15",
   "planned_orders": "0",
   "positions": [],
   "rebalance_day": "False",
   "selected_symbols": [
+    "003015.SZ",
     "603721.SH",
     "003025.SZ",
-    "003015.SZ",
-    "003017.SZ",
-    "003020.SZ",
-    "003016.SZ",
     "002917.SZ",
-    "003023.SZ",
+    "003020.SZ",
     "002896.SZ",
-    "002915.SZ"
+    "003017.SZ",
+    "003016.SZ",
+    "002922.SZ",
+    "002875.SZ"
   ],
   "signal_date": "2026-11-20",
-  "updated_at": "2026-11-20T16:46:54+08:00",
+  "updated_at": "2026-11-20T17:20:25+08:00",
   "watch_symbols": [
+    "002875.SZ",
     "002896.SZ",
-    "002915.SZ",
     "002917.SZ",
+    "002922.SZ",
     "003015.SZ",
     "003016.SZ",
     "003017.SZ",
     "003020.SZ",
-    "003023.SZ",
     "003025.SZ",
     "603721.SH"
   ]
