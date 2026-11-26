@@ -1,0 +1,6 @@
+job_type: intraday_watch
+config: configs/smallcap_best.yaml
+watch_date: 20261127
+last_changed_time: 0133
+signal_date: 2026-11-26
+generated_at: 2026-11-27T01:34:22+08:00
