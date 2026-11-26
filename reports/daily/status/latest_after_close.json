@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-11-25T18:38:38",
+  "generated_at": "2026-11-26T18:25:39",
   "job": "after_close",
-  "status": "ok",
-  "severity": "info",
-  "trading_day": "2026-11-25",
-  "message": "after-close selection completed",
+  "status": "no_eligible_symbols",
+  "severity": "warning",
+  "trading_day": "2026-11-27",
+  "message": "health filters removed all symbols",
   "details": {
-    "output_dir": "reports/daily/20261125",
-    "eligible_symbols": 7
+    "output_dir": "reports/daily/20261127",
+    "health_rows": 0
   }
 }
