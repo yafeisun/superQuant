@@ -1,12 +1,9 @@
 {
-  "generated_at": "2026-11-26T18:25:39",
+  "generated_at": "2026-11-27T18:08:29",
   "job": "after_close",
-  "status": "no_eligible_symbols",
-  "severity": "warning",
-  "trading_day": "2026-11-27",
-  "message": "health filters removed all symbols",
-  "details": {
-    "output_dir": "reports/daily/20261127",
-    "health_rows": 0
-  }
+  "status": "skipped_non_trading_day",
+  "severity": "info",
+  "trading_day": "2026-11-28",
+  "message": "target date is not an A-share trading day",
+  "details": {}
 }
